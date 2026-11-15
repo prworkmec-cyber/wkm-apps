@@ -36,14 +36,39 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}.minus{color:var(--bad)}
 .cal .cd.ph:after{content:'';position:absolute;bottom:4px;left:50%;margin-left:-3px;width:6px;height:6px;border-radius:50%;background:#2e7d32}
 .cal .cd.on.ph:after{background:#fff}
 .cal .cd:disabled{opacity:.3}
+.hide{display:none!important}
+body{padding-bottom:84px}
+.btabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:#fff;border-top:1px solid #e3d8cc;box-shadow:0 -2px 8px rgba(0,0,0,.08);padding:6px 8px calc(6px + env(safe-area-inset-bottom));z-index:20}
+.btabs button{flex:1;width:auto;margin:0 4px;padding:8px 4px;font-size:15px;line-height:1.3;background:none;color:#7a6a5a;border-radius:10px}
+.btabs button.on{background:#f6e7d6;color:var(--acc)}
+.invtop{display:flex;gap:8px}.invtop input{flex:1;min-width:0;width:auto;font-size:16px;padding:10px;border:1px solid #ccc;border-radius:8px}
+.invtop button{width:48px;margin:0;padding:0;font-size:22px}
+.chips{display:flex;gap:6px;margin-top:10px}.chips button{width:auto;flex:1;margin:0;padding:8px 4px;font-size:14px;background:#f1e6da;color:var(--acc)}
+.chips button.on{background:var(--acc);color:#fff}
+.it{display:flex;gap:12px;background:#fff;border-radius:12px;padding:10px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.it .ph{width:84px;height:84px;flex:0 0 84px;border-radius:8px;background:#f1ece6 center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:#b9a99a;font-size:11px;overflow:hidden}
+.it .ph img{width:100%;height:100%;object-fit:cover}
+.it .bd{flex:1;min-width:0}
+.it .cd1{font-weight:bold;font-size:16px}.it .nmz{font-size:14px;margin-top:2px}.it .art{font-family:monospace;font-size:12px;color:#555;margin-top:3px;word-break:break-all}
+.it .stk{margin-top:6px;font-size:15px}.it .stk b{font-size:17px}.it .zero{color:var(--bad);font-weight:bold}
+#zoom{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+#zoom img{max-width:100%;max-height:80vh;border-radius:8px;background:#fff}#zcap{color:#fff;margin-top:10px;text-align:center;font-size:15px}
 </style></head><body><div class="wrap">
 <h1>WKM Stock Check</h1><div class="sub">Upload the daily stock sheet photo, check the balance left for each item, then post the new entries.</div>
 <div class="card"><label>PIN</label><input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="Enter PIN"></div>
-<div class="card"><label>Project / order</label><select id="ord"><option value="">Enter the PIN to load orders…</option></select></div>
+<div id="vCheck"><div class="card"><label>Project / order</label><select id="ord"><option value="">Enter the PIN to load orders…</option></select></div>
 <div class="card"><label>Entry dates <span class="nm">(tap one or more days)</span></label><input id="dt" type="hidden"><div id="cal" class="cal"></div><div id="dsel" class="nm" style="margin-top:8px"></div></div>
 <div class="card"><label class="pick">📷 Take / upload photo<input id="file" type="file" accept="image/*"></label><div id="fn" class="fn"></div>
 <button id="go" onclick="go()">Check balances</button><div id="st"></div></div>
 <div id="out"></div></div>
+<div id="vInv" class="hide">
+ <div class="card"><div class="invtop"><input id="iq" type="search" placeholder="Search code, name or article" oninput="drawInv()"><button type="button" id="irf" onclick="loadInv(true)">↻</button></div>
+  <div class="chips"><button type="button" data-f="all" class="on" onclick="invFilter(this)">All</button><button type="button" data-f="in" onclick="invFilter(this)">In stock</button><button type="button" data-f="zero" onclick="invFilter(this)">Zero stock</button></div>
+  <div id="ist" class="nm" style="margin-top:8px">Enter the PIN above to see the inventory.</div></div>
+ <div id="ilist"></div>
+</div></div>
+<nav class="btabs"><button type="button" id="tChk" class="on" onclick="setView('chk')">📷<br>Daily check</button><button type="button" id="tInv" onclick="setView('inv')">📦<br>Inventory</button></nav>
+<div id="zoom" class="hide" onclick="this.classList.add('hide')"><img id="zimg" alt=""><div id="zcap"></div></div>
 <script>
 /* Adapter: this page is hosted on GitHub Pages and talks to the WKM Stock Check Apps Script
    backend (JSON API, doPost) in the background - no Google sign-in involved. The PIN, the AI key
@@ -127,6 +152,30 @@ function drawCal(){var sel=selDates(),ph=[],today=ymd(new Date());(window.LASTRO
   h+='<button type="button" class="cd'+(sel.indexOf(k)>=0?' on':'')+(ph.indexOf(k)>=0?' ph':'')+'"'+(k>today?' disabled':'')+' onclick="calTog(\''+k+'\')">'+d+'</button>';}
  document.getElementById('cal').innerHTML=h+'</div>';
  document.getElementById('dsel').innerHTML=sel.length?'Showing: <b>'+sel.map(nice).join(', ')+'</b> · <a href="#" onclick="setDates([]);return false">show all dates</a>':'No day picked – showing <b>all dates</b> on the photo.';}
+var INV=null,INVF='all',INVPIN='';
+function setView(v){document.getElementById('vCheck').classList.toggle('hide',v!=='chk');document.getElementById('vInv').classList.toggle('hide',v!=='inv');
+ document.getElementById('tChk').classList.toggle('on',v==='chk');document.getElementById('tInv').classList.toggle('on',v==='inv');
+ try{localStorage.setItem('wkmview',v);}catch(e){} if(v==='inv')loadInv(false);window.scrollTo(0,0);}
+function loadInv(force){var pin=document.getElementById('pin').value.trim(),st=document.getElementById('ist');
+ if(pin.length<4){st.innerHTML='Enter the PIN above to see the inventory.';return;}
+ if(INV&&!force&&INVPIN===pin){drawInv();return;}
+ st.innerHTML='Loading live stock…';
+ fetch(WKM_API,{method:'POST',body:JSON.stringify({action:'inventory',pin:pin}),redirect:'follow'}).then(function(r){if(!r.ok)throw new Error('Server error '+r.status);return r.json();})
+  .then(function(j){if(!j||j.error){st.innerHTML='<span class="bad">'+esc((j&&j.error)||'Could not load')+'</span>';return;}INV=j.items||[];INVPIN=pin;INV.at=j.at;drawInv();})
+  .catch(function(e){st.innerHTML='<span class="bad">Could not load ('+esc(e.message||e)+'). Tap ↻ to try again.</span>';});}
+function invFilter(b){INVF=b.dataset.f;[].forEach.call(document.querySelectorAll('.chips button'),function(x){x.classList.toggle('on',x===b);});drawInv();}
+function invQty(n,u){return (Number(n)||0).toLocaleString('en-US')+' <span class="nm">'+esc(u||'')+'</span>';}
+function drawInv(){if(!INV)return;var q=(document.getElementById('iq').value||'').toLowerCase().replace(/\s+/g,' ').trim();
+ var list=INV.filter(function(i){var has=(Number(i.kg)||0)>0||(Number(i.nos)||0)>0;if(INVF==='in'&&!has)return false;if(INVF==='zero'&&has)return false;
+  if(!q)return true;var hay=(i.code+' wkm'+i.no+' '+i.name+' '+i.size+' '+i.article+' '+i.material).toLowerCase();return q.split(' ').every(function(w){return hay.indexOf(w)>=0;});});
+ document.getElementById('ist').innerHTML=list.length+' of '+INV.length+' items · live stock at '+esc(INV.at||'')+' · view only';
+ var h='';list.forEach(function(i){var k=INV.indexOf(i),has=(Number(i.kg)||0)>0||(Number(i.nos)||0)>0;
+  h+='<div class="it"><div class="ph"'+(i.img?' onclick="zoomInv('+k+')"':'')+'>'+(i.img?'<img loading="lazy" referrerpolicy="no-referrer" src="'+esc(i.img)+'" alt="">':'no picture')+'</div><div class="bd">'
+   +'<div class="cd1">'+esc(i.code)+'</div><div class="nmz">'+esc(i.name)+(i.size?' · '+esc(i.size):'')+'</div>'
+   +(i.article?'<div class="art">'+esc(i.article)+(i.material?' · '+esc(i.material):'')+'</div>':'')
+   +'<div class="stk">'+(has?'<b>'+invQty(i.kg,i.kgU||'KG')+'</b> &nbsp;·&nbsp; <b>'+invQty(i.nos,i.nosU||'NO')+'</b>':'<span class="zero">Out of stock</span>')+'</div></div></div>';});
+ document.getElementById('ilist').innerHTML=h||'<div class="card">Nothing matches.</div>';}
+function zoomInv(k){var i=INV[k];if(!i||!i.img)return;document.getElementById('zimg').src=i.img;document.getElementById('zcap').innerHTML='<b>'+esc(i.code)+'</b> · '+esc(i.name)+(i.size?' · '+esc(i.size):'')+'<br>'+esc(i.article||'');document.getElementById('zoom').classList.remove('hide');}
 function fmtd(n){n=Math.round(n*100)/100;return (n>0?'+':'')+n;}
 function show(all){[].forEach.call(document.querySelectorAll('.rsh'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r&&i.value){r.shift=i.value;r._shAssumed=false;}});[].forEach.call(document.querySelectorAll('.rn'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.note=i.value.trim();});[].forEach.call(document.querySelectorAll('.rd'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.doc=i.value.trim();});[].forEach.call(document.querySelectorAll('.rp'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.party=i.value.trim();});window.LASTROWS=all;drawCal();var sel=document.getElementById('dt').value;var shf='';var rows=all.filter(function(r){if(sel&&sel.split(',').indexOf(r.date)<0)return false;if(!r.shift||r._shAssumed){r.shift=shf;r._shAssumed=true;}if(shf&&r.shift!==shf)return false;return true;});
  if(!rows.length&&all.length){var ds=[];all.forEach(function(r){if(r.date&&ds.indexOf(r.date)<0)ds.push(r.date);});document.getElementById('out').innerHTML='<div class="card">No entries for <b>'+esc(sel.split(',').map(nice).join(', '))+(shf?' · '+(shf==='N'?'Night':'Day')+' shift':'')+'</b> on this photo.'+(ds.length?'<br>Dates on the photo: '+ds.map(nice).join(', ')+'. Tap those days in the calendar to see them (green dot = on the photo).':'')+'</div>';return;}
@@ -161,4 +210,5 @@ function post(){var np=window.TOPOST||[];if(!np.length)return;[].forEach.call(do
    show(window.LASTROWS);msg('✅ Posted '+r.ok+' entr'+(r.ok===1?'y':'ies')+' to the ledger.'+(errs.length?' Note: '+esc(errs.join(', ')):''),'wait');})
   .withFailureHandler(function(e){b.disabled=false;ps.innerHTML='<div class="msg err">Error: '+esc(e.message||e)+'</div>';}).stockPost(document.getElementById('pin').value.trim(),np,who,ord);}
 
+document.getElementById('pin').addEventListener('input',function(){if(this.value.trim().length>=4&&!document.getElementById('vInv').classList.contains('hide'))loadInv(false);});
 </script></body></html>
