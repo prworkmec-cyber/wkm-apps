@@ -153,15 +153,17 @@ function drawCal(){var sel=selDates(),ph=[],today=ymd(new Date());(window.LASTRO
  document.getElementById('cal').innerHTML=h+'</div>';
  document.getElementById('dsel').innerHTML=sel.length?'Showing: <b>'+sel.map(nice).join(', ')+'</b> · <a href="#" onclick="setDates([]);return false">show all dates</a>':'No day picked – showing <b>all dates</b> on the photo.';}
 var INV=null,INVF='all',INVPIN='';
+function pinH(p){var h=5381;p='wkm|'+p;for(var i=0;i<p.length;i++)h=((h<<5)+h+p.charCodeAt(i))|0;return h;}   // saved list only shows again with the right PIN
 function setView(v){document.getElementById('vCheck').classList.toggle('hide',v!=='chk');document.getElementById('vInv').classList.toggle('hide',v!=='inv');
  document.getElementById('tChk').classList.toggle('on',v==='chk');document.getElementById('tInv').classList.toggle('on',v==='inv');
  try{localStorage.setItem('wkmview',v);}catch(e){} if(v==='inv')loadInv(false);window.scrollTo(0,0);}
 function loadInv(force){var pin=document.getElementById('pin').value.trim(),st=document.getElementById('ist');
  if(pin.length<4){st.innerHTML='Enter the PIN above to see the inventory.';return;}
  if(INV&&!force&&INVPIN===pin){drawInv();return;}
- st.innerHTML='Loading live stock…';
+ if(!INV){try{var sv=JSON.parse(localStorage.getItem('wkminv')||'null');if(sv&&sv.items&&sv.p===pinH(pin)){INV=sv.items;INV.at=sv.at;drawInv();}}catch(e){}}   // show last list at once
+ st.innerHTML=(INV?st.innerHTML+' · ':'')+'<b>Updating live stock…</b>';
  fetch(WKM_API,{method:'POST',body:JSON.stringify({action:'inventory',pin:pin}),redirect:'follow'}).then(function(r){if(!r.ok)throw new Error('Server error '+r.status);return r.json();})
-  .then(function(j){if(!j||j.error){st.innerHTML='<span class="bad">'+esc((j&&j.error)||'Could not load')+'</span>';return;}INV=j.items||[];INVPIN=pin;INV.at=j.at;drawInv();})
+  .then(function(j){if(!j||j.error){st.innerHTML='<span class="bad">'+esc((j&&j.error)||'Could not load')+'</span>';return;}INV=j.items||[];INVPIN=pin;INV.at=j.at;drawInv();try{localStorage.setItem('wkminv',JSON.stringify({items:INV,at:j.at,p:pinH(pin)}));}catch(e){}})
   .catch(function(e){st.innerHTML='<span class="bad">Could not load ('+esc(e.message||e)+'). Tap ↻ to try again.</span>';});}
 function invFilter(b){INVF=b.dataset.f;[].forEach.call(document.querySelectorAll('.chips button'),function(x){x.classList.toggle('on',x===b);});drawInv();}
 function invQty(n,u){return (Number(n)||0).toLocaleString('en-US')+' <span class="nm">'+esc(u||'')+'</span>';}
