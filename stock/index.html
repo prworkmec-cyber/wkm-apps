@@ -212,9 +212,13 @@ function imgWatch(){if(!('IntersectionObserver' in window)){[].forEach.call(docu
  if(!IMGOBS)IMGOBS=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){IMGOBS.unobserve(e.target);imgNeed(+e.target.dataset.r);}});},{rootMargin:'300px'});
  [].forEach.call(document.querySelectorAll('.ph[data-r]'),function(e){var r=+e.dataset.r;if(IMGC[r]!==undefined)imgPut(r);else IMGOBS.observe(e);});}
 function imgNeed(r){if(IMGC[r]!==undefined){imgPut(r);return;}if(IMGQ.indexOf(r)<0)IMGQ.push(r);imgPump();}
-function imgPump(){while(IMGBUSY<3&&IMGQ.length){var b=IMGQ.splice(0,6);IMGBUSY++;
- api({action:'imgs',rows:b}).then(function(j){var m=(j&&j.imgs)||{};b.forEach(function(r){IMGC[r]=m[r]||'';imgPut(r);});})
-  .catch(function(){b.forEach(function(r){delete IMGC[r];});}).then(function(){IMGBUSY--;imgPump();});}}
+var IMGTRY={};
+function imgPump(){while(IMGBUSY<2&&IMGQ.length){var b=IMGQ.splice(0,6);IMGBUSY++;
+ api({action:'imgs',rows:b}).then(function(j){var m=(j&&j.imgs)||{};b.forEach(function(r){
+   if(m[r]!==undefined){IMGC[r]=m[r];imgPut(r);return;}                         // picture or confirmed "no picture"
+   IMGTRY[r]=(IMGTRY[r]||0)+1;if(IMGTRY[r]<4)setTimeout(function(){imgNeed(r);},2500*IMGTRY[r]);});})   // server busy: try again
+  .catch(function(){b.forEach(function(r){IMGTRY[r]=(IMGTRY[r]||0)+1;if(IMGTRY[r]<4)setTimeout(function(){imgNeed(r);},3000);});})
+  .then(function(){IMGBUSY--;imgPump();});}}
 function imgPut(r){[].forEach.call(document.querySelectorAll('.ph[data-r="'+r+'"]'),function(e){e.innerHTML=IMGC[r]?'<img src="'+IMGC[r]+'" alt="">':'no picture';});}
 
 /* ---------- admin mode (separate admin code, kept in memory only) ---------- */
