@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qatalum – Daily Production</title>
+<style>
+  body{font-family:Arial,sans-serif;margin:0;background:#f4f6f8;color:#222}
+  .wrap{max-width:440px;margin:auto;padding:14px}
+  h1{font-size:20px;color:#1a73e8;margin:6px 0 12px}
+  label{display:block;font-weight:bold;margin:12px 0 4px;font-size:15px}
+  input{width:100%;box-sizing:border-box;font-size:20px;padding:10px;border:1px solid #c8c8c8;border-radius:8px;background:#fff}
+  input.changed{border:2px solid #f9ab00;background:#fff8e1}
+  .shift{display:flex;gap:10px}
+  .shift button{flex:1;font-size:18px;padding:14px;border:2px solid #1a73e8;background:#fff;color:#1a73e8;border-radius:8px}
+  .shift button.on{background:#1a73e8;color:#fff}
+  h2{font-size:13px;color:#555;margin:20px 0 0;border-bottom:1px solid #ddd;padding-bottom:4px;text-transform:uppercase}
+  .live{font-size:13px;color:#555;margin-top:4px;line-height:1.5}
+  .live b{color:#188038}
+  .live .chg{color:#b06000;font-weight:bold}
+  .live .warn{color:#c5221f;font-weight:bold}
+  .card{background:#fff;border-radius:10px;padding:12px;margin-top:16px;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+  .card div{display:flex;justify-content:space-between;font-size:15px;padding:3px 0}
+  .card b{font-size:17px}
+  #save{width:100%;margin-top:20px;font-size:20px;padding:16px;background:#188038;color:#fff;border:0;border-radius:8px}
+  #save:disabled{background:#9e9e9e}
+  #msg{margin-top:14px;font-size:15px;text-align:center;white-space:pre-line}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Qatalum – Daily Production</h1>
+  <label>Date</label>
+  <input type="date" id="date">
+  <label>Shift</label>
+  <div class="shift"><button id="Day" class="on">Day</button><button id="Night">Night</button></div>
+  <div id="fields"></div>
+  <div class="card" id="sum"></div>
+  <button id="save">Save</button>
+  <div id="msg"></div>
+</div>
+<script>
+  // Data lives in the Google Sheet; this page talks to the Apps Script web app's JSON API.
+  const API = 'https://script.google.com/macros/s/AKfycbygNAt3BORXl47Th-s4sZRiKSNW2JOc41o0_X8EKrmaKXAyeasuz9aBH6pxGldeKZtzDg/exec';
+  function call(params, ok, fail) {
+    fetch(API + '?' + new URLSearchParams(params).toString(), { redirect: 'follow' })
+      .then(r => { if (!r.ok) throw new Error('Server error ' + r.status); return r.json(); })
+      .then(j => { if (j && j.error) throw new Error(j.error); ok(j); })
+      .catch(e => fail(e));
+  }
+
+  const F = [
+    ['cages', 'Complete cages', 'Made this shift', 'qty'],
+    ['spn', 'Spider rings – normal', '', 'qty'],
+    ['spi', 'Spider rings – inverted', '', 'qty'],
+    ['arms', 'Arms counter', 'Machine counter readings (once a day)', 'ctr'],
+    ['small', 'Small rings counter', '', 'ctr'],
+    ['wire', 'Long wire counter', '', 'ctr']
+  ];
+  let shift = 'Day', live = null;
+  const $ = id => document.getElementById(id);
+  const pad = n => String(n).padStart(2, '0');
+  const fmt = n => Number(n).toLocaleString('en-US');
+  const t = new Date();
+  $('date').value = t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate());
+  $('date').max = $('date').value;
+
+  let h = '';
+  F.forEach(f => {
+    if (f[2]) h += '<h2>' + f[2] + '</h2>';
+    h += '<label>' + f[1] + '</label><input type="number" inputmode="numeric" min="0" id="f_' + f[0] + '">' +
+         '<div class="live" id="l_' + f[0] + '"></div>';
+  });
+  $('fields').innerHTML = h;
+  F.forEach(f => $('f_' + f[0]).oninput = calc);
+
+  const num = v => (v === '' || v === null || v === undefined || isNaN(Number(v))) ? null : Number(v);
+  // a counter reading of 0 means "no reading" (ignored)
+  const ctr = v => { const n = num(v); return n === 0 ? null : n; };
+  // made by a counter reading compared with the previous reading (reset = reading itself)
+  const made = (reading, prev) => reading === null ? 0 : (prev === null || reading < prev ? reading : reading - prev);
+
+  function calc() {
+    if (!live) return;
+    const after = {};
+    F.forEach(f => {
+      const k = f[0], el = $('f_' + k), out = $('l_' + k);
+      const total = live.totals[k];
+      let txt = '';
+      if (f[3] === 'qty') {
+        const saved = num(live.entry[k]), typed = num(el.value);
+        const a = total + (typed || 0);
+        after[k] = a;
+        txt = 'Balance now ' + fmt(total) + (typed !== null ? ' + ' + fmt(typed) + ' = new balance <b>' + fmt(a) + '</b>' : '') +
+              (saved ? '<br><span class="chg">Already entered for this shift: ' + fmt(saved) + ' (your number is added to it)</span>' : '');
+      } else {
+        const saved = ctr(live.entry[k]), typed = ctr(el.value), prev = ctr(live.prev[k]);
+        const mSaved = made(saved, prev), mNew = typed === null ? mSaved : made(typed, prev);
+        const a = total - mSaved + mNew;
+        after[k] = a;
+        txt = 'Previous reading: ' + (prev === null ? '—' : fmt(prev));
+        if (typed !== null) txt += ' · made today <b>' + fmt(mNew) + '</b>';
+        else if (num(el.value) === 0) txt += ' · <b>0 = no reading</b> (ignored)';
+        txt += '<br>Balance now ' + fmt(total) + (typed !== null ? ' → new balance <b>' + fmt(a) + '</b>' : '');
+        if (typed !== null && prev !== null && typed < prev)
+          txt += '<br><span class="warn">Reading is lower than previous – counter reset? Counted as ' + fmt(typed) + '.</span>';
+        if (saved !== null) txt += '<br><span class="chg">Reading already entered today: ' + fmt(saved) + ' (your reading replaces it)</span>';
+      }
+      out.innerHTML = txt;
+    });
+    const rem = Math.max(0, live.totals.order - after.cages);
+    $('sum').innerHTML =
+      '<div><span>Cages made – new balance</span><b>' + fmt(after.cages) + '</b></div>' +
+      '<div><span>Order</span><span>' + fmt(live.totals.order) + '</span></div>' +
+      '<div><span>Remaining</span><b>' + fmt(rem) + '</b></div>' +
+      '<div><span>Complete</span><span>' + (live.totals.order ? (after.cages / live.totals.order * 100).toFixed(1) : 0) + '%</span></div>';
+  }
+
+  let req = 0;
+  function load(keepMsg) {
+    if (!keepMsg) $('msg').textContent = 'Loading…';
+    $('save').disabled = true;
+    const my = ++req;
+    call({ api: 'live', date: $('date').value, shift: shift }, v => {
+      if (my !== req) return;            // a newer date/shift was picked meanwhile
+      live = v;
+      F.forEach(f => { $('f_' + f[0]).value = ''; });
+      calc();
+      if (!keepMsg) $('msg').textContent = '';
+      $('save').disabled = false;
+    }, e => { if (my === req) $('msg').textContent = '⚠ ' + e.message; });
+  }
+
+  ['Day', 'Night'].forEach(s => $(s).onclick = () => {
+    shift = s;
+    $('Day').classList.toggle('on', s === 'Day');
+    $('Night').classList.toggle('on', s === 'Night');
+    load();
+  });
+  $('date').onchange = () => load();
+
+  $('save').onclick = () => {
+    const vals = {};
+    F.forEach(f => {
+      const v = $('f_' + f[0]).value;
+      if (v === '') return;
+      if (f[3] === 'ctr' && Number(v) === 0) return;   // 0 counter = no reading, not sent
+      vals[f[0]] = v;
+    });
+    if (!Object.keys(vals).length) { $('msg').textContent = 'Nothing to save – type at least one number.'; return; }
+    $('save').disabled = true;
+    $('msg').textContent = 'Saving…';
+    call({ api: 'add', date: $('date').value, shift: shift, vals: JSON.stringify(vals) }, r => {
+      $('msg').textContent = '✓ ' + r.message;
+      live = r.live;
+      F.forEach(f => { $('f_' + f[0]).value = ''; });
+      calc();
+      $('save').disabled = false;
+    }, e => { $('msg').textContent = '⚠ ' + e.message; $('save').disabled = false; });
+  };
+  load();
+</script>
+</body>
+</html>
