@@ -65,10 +65,17 @@ button.ghost{background:#fff;color:var(--acc);border:2px solid var(--acc)}
 #sheet h3{margin:0 0 6px}#sheet label{margin-top:10px}#sheet input[type=number],#sheet input[type=password]{width:100%;font-size:18px;padding:10px;border:1px solid #ccc;border-radius:8px}
 .edimg{height:180px;border-radius:10px;background:#f1ece6;display:flex;align-items:center;justify-content:center;color:#b9a99a;overflow:hidden;margin:6px 0}.edimg img{max-width:100%;max-height:100%}
 .seg{display:flex;gap:6px;margin-top:10px}.seg button{width:auto;flex:1;margin:0;background:#f1e6da;color:var(--acc)}.seg button.on{background:var(--acc);color:#fff}
+.hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.admpill{width:auto;margin:2px 0 0;padding:6px 10px;font-size:15px;border-radius:20px;background:#efe6dc;color:var(--acc);flex:0 0 auto}
+.admpill.on{background:#2e7d32;color:#fff}
+.le .lx{width:auto;margin:0 0 0 8px;padding:2px 10px;font-size:14px;background:#f1e6da;color:var(--acc);border-radius:14px}
+#lq{width:100%;margin-top:8px;font-size:15px;padding:9px;border:1px solid #ccc;border-radius:8px}
+button.del{background:#fff;color:var(--bad);border:2px solid var(--bad)}
+.fx{background:#f3f3f3!important;color:#888}
 #zoom{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
 #zoom img{max-width:100%;max-height:80vh;border-radius:8px;background:#fff}#zcap{color:#fff;margin-top:10px;text-align:center;font-size:15px}
 </style></head><body><div class="wrap">
-<h1>WKM Stock Check</h1><div class="sub">Upload the daily stock sheet photo, check the balance left for each item, then post the new entries.</div>
+<div class="hdr"><h1>WKM Stock Check</h1><button type="button" class="adm admpill" onclick="adminAsk()">🔒</button></div><div class="sub">Upload the daily stock sheet photo, check the balance left for each item, then post the new entries.</div>
 <div class="card"><label>PIN</label><input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="Enter PIN"></div>
 <div id="vCheck"><div class="card"><label>Project / order</label><select id="ord"><option value="">Enter the PIN to load orders…</option></select></div>
 <div class="card"><label>Entry dates <span class="nm">(tap one or more days)</span></label><input id="dt" type="hidden"><div id="cal" class="cal"></div><div id="dsel" class="nm" style="margin-top:8px"></div></div>
@@ -78,14 +85,12 @@ button.ghost{background:#fff;color:var(--acc);border:2px solid var(--acc)}
 <div id="vInv" class="hide">
  <div class="card"><div class="invtop"><input id="iq" type="search" placeholder="Search code, name or article" oninput="drawInv()"><button type="button" id="irf" onclick="loadInv(true)">↻</button></div>
   <div class="chips"><button type="button" data-f="all" class="on" onclick="invFilter(this)">All</button><button type="button" data-f="in" onclick="invFilter(this)">In stock</button><button type="button" data-f="zero" onclick="invFilter(this)">Zero stock</button></div>
-  <div id="ist" class="nm" style="margin-top:8px">Enter the PIN above to see the inventory.</div>
-  <button type="button" class="adm ghost" onclick="adminAsk()">🔒 Admin</button></div>
+  <div id="ist" class="nm" style="margin-top:8px">Enter the PIN above to see the inventory.</div></div>
  <div id="ilist"></div>
 </div></div>
 <div id="vLed" class="hide">
  <div class="card"><div class="invtop"><select id="lsel" onchange="loadLedger()"><option value="">Choose an item…</option></select><button type="button" onclick="loadLedger()">↻</button></div>
-  <div id="lst" class="nm" style="margin-top:8px">Choose an item to see its statement.</div>
-  <button type="button" class="adm ghost" onclick="adminAsk()">🔒 Admin</button></div>
+  <div id="lst" class="nm" style="margin-top:8px">Choose an item to see its statement.</div></div>
  <div id="lout"></div>
 </div>
 <nav class="btabs"><button type="button" id="tChk" class="on" onclick="setView('chk')">📷<br>Daily check</button><button type="button" id="tInv" onclick="setView('inv')">📦<br>Inventory</button><button type="button" id="tLed" onclick="setView('led')">📒<br>Statement</button></nav>
@@ -221,7 +226,7 @@ function adminTry(){var c=document.getElementById('acode').value.trim(),st=docum
  fetch(WKM_API,{method:'POST',body:JSON.stringify({action:'admincheck',admin:c}),redirect:'follow'}).then(function(r){return r.json();})
   .then(function(j){if(j&&j.ok){ADMIN=c;closeSheet();adminUi();}else st.innerHTML='<div class="msg err">Wrong admin code</div>';})
   .catch(function(e){st.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';});}
-function adminUi(){[].forEach.call(document.querySelectorAll('.adm'),function(b){b.textContent=ADMIN?'🔓 Admin on – lock':'🔒 Admin';b.classList.toggle('on',!!ADMIN);});
+function adminUi(){[].forEach.call(document.querySelectorAll('.adm'),function(b){b.textContent=ADMIN?'🔓 Admin':'🔒';b.title=ADMIN?'Admin on – tap to lock':'Admin';b.classList.toggle('on',!!ADMIN);});
  document.body.classList.toggle('isadmin',!!ADMIN);drawInv();if(LEDGER)drawLedger();}
 
 /* bottom sheet used for admin code, edit item, add entry */
@@ -269,15 +274,19 @@ function lnum(x){return String(x||'').replace(/[,\s]/g,'')!==''&&Number(String(x
 function drawLedger(){var L=LEDGER;if(!L)return;
  document.getElementById('lst').innerHTML='<b>'+esc(L.code)+'</b> · '+esc(L.name)+(L.size?' · '+esc(L.size):'')+(L.article?'<br><span class="art">'+esc(L.article)+'</span>':'')
   +'<div class="lbal">Balance now: <b>'+esc(L.balKg||'0')+'</b> '+esc(L.kgU)+' &nbsp;·&nbsp; <b>'+esc(L.balNos||'0')+'</b> '+esc(L.nosU)+'</div>'
-  +'<div class="nm">'+L.total+' entries'+(L.total>L.rows.length?' · showing the last '+L.rows.length:'')+' · newest first</div>'
+  +'<div class="nm">All '+L.total+' entries · newest first'+(ADMIN?' · tap ✎ to change or delete a line':'')+'</div>'
+  +'<input id="lq" type="search" placeholder="Search this statement (date, doc, order, note…)" oninput="drawLedgerRows()" value="'+esc(LQ)+'">'
   +(ADMIN?'<button type="button" onclick="addEntry()">＋ Add entry to this statement</button>':'');
- var h='';L.rows.slice().reverse().forEach(function(r){var mv=[];
+ drawLedgerRows();}
+var LQ='';
+function drawLedgerRows(){var L=LEDGER;if(!L)return;var qi=document.getElementById('lq');LQ=qi?qi.value:'';var q=LQ.toLowerCase().trim();
+ var h='';L.rows.slice().reverse().forEach(function(r){if(q&&r.slice(0,12).join(' ').toLowerCase().indexOf(q)<0)return;var mv=[];
   if(lnum(r[1]))mv.push('<span class="plus">+'+esc(r[1])+' '+esc(L.kgU)+'</span>');if(lnum(r[2]))mv.push('<span class="minus">−'+esc(r[2])+' '+esc(L.kgU)+'</span>');
   if(lnum(r[4]))mv.push('<span class="plus">+'+esc(r[4])+' '+esc(L.nosU)+'</span>');if(lnum(r[5]))mv.push('<span class="minus">−'+esc(r[5])+' '+esc(L.nosU)+'</span>');
   var info=[];if(r[7])info.push('Doc '+esc(r[7]));if(r[8])info.push('Order '+esc(r[8]));if(r[9])info.push(esc(r[9]));if(r[10])info.push(esc(r[10]));
-  h+='<div class="le"><div class="lt"><b>'+esc(r[0])+'</b>'+(r[11]?' · '+(String(r[11]).charAt(0)==='N'?'Night':'Day'):'')+'<span class="lb">bal '+esc(r[3]||'')+' '+esc(L.kgU)+(r[6]!==''?' / '+esc(r[6])+' '+esc(L.nosU):'')+'</span></div>'
+  h+='<div class="le"><div class="lt"><span><b>'+esc(r[0])+'</b>'+(r[11]?' · '+(String(r[11]).charAt(0)==='N'?'Night':'Day'):'')+(ADMIN?'<button type="button" class="lx" onclick="editLine('+r[12]+')">✎</button>':'')+'</span><span class="lb">bal '+esc(r[3]||'')+' '+esc(L.kgU)+(r[6]!==''?' / '+esc(r[6])+' '+esc(L.nosU):'')+'</span></div>'
    +'<div class="lm">'+(mv.join(' &nbsp; ')||'<span class="nm">no movement</span>')+'</div>'+(info.length?'<div class="nm">'+info.join(' · ')+'</div>':'')+'</div>';});
- document.getElementById('lout').innerHTML=h||'<div class="card">No entries yet.</div>';}
+ document.getElementById('lout').innerHTML=h||'<div class="card">'+(q?'Nothing matches.':'No entries yet.')+'</div>';}
 function addEntry(){var L=LEDGER;if(!L||!ADMIN)return;var t=new Date(),td=t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2);
  var ords=[].map.call(document.getElementById('ord').options,function(o){return o.value?'<option value="'+esc(o.value)+'">'+esc(o.text)+'</option>':'';}).join('');
  var nm='';try{nm=localStorage.getItem('wkmname')||'';}catch(e){}
@@ -292,6 +301,36 @@ function addEntry(){var L=LEDGER;if(!L||!ADMIN)return;var t=new Date(),td=t.getF
   +'<label>Note</label><input id="enote" type="text">'
   +'<label>Your name</label><input id="eby" type="text" value="'+esc(nm)+'">'
   +'<button type="button" id="epost" onclick="postEntry()">Post to statement</button><button type="button" class="ghost" onclick="closeSheet()">Cancel</button><div id="est"></div>');}
+function editLine(row){var L=LEDGER;if(!L||!ADMIN)return;var r=L.rows.filter(function(x){return x[12]===row;})[0];if(!r)return;
+ var fx=String(r[14]||'0000'),nm='';try{nm=localStorage.getItem('wkmname')||'';}catch(e){}
+ var numf=function(id,lab,val,isF){return '<div><label>'+lab+'</label><input id="'+id+'" type="text" inputmode="decimal" value="'+esc(String(val||'').replace(/,/g,''))+'"'+(isF==='1'?' class="fx" readonly title="Calculated by a formula in the sheet"':'')+'></div>';};
+ openSheet('<h3>Edit line · '+esc(L.code)+'</h3><div class="nm">Sheet row '+row+' · balance columns are formulas and update by themselves'+(fx.indexOf('1')>=0?' · grey boxes are calculated (pieces × unit weight)':'')+'</div>'
+  +'<label>Date</label><input id="xd" type="date" value="'+esc(r[13]||'')+'">'
+  +'<label>Shift</label><div class="seg" id="xsh"><button type="button" data-v="D" class="'+(r[11]==='D'?'on':'')+'" onclick="seg(this)">Day</button><button type="button" data-v="N" class="'+(r[11]==='N'?'on':'')+'" onclick="seg(this)">Night</button><button type="button" data-v="" class="'+(r[11]!=='D'&&r[11]!=='N'?'on':'')+'" onclick="seg(this)">–</button></div>'
+  +'<div class="two">'+numf('xik','In '+esc(L.kgU),r[1],fx[0])+numf('xok','Out '+esc(L.kgU),r[2],fx[1])+'</div>'
+  +'<div class="two">'+numf('xin','In '+esc(L.nosU),r[4],fx[2])+numf('xon','Out '+esc(L.nosU),r[5],fx[3])+'</div>'
+  +'<label>Doc No.</label><input id="xdoc" type="text" value="'+esc(r[7])+'">'
+  +'<label>Order</label><input id="xord" type="text" value="'+esc(r[8])+'">'
+  +'<label>Description / customer / supplier</label><input id="xdesc" type="text" value="'+esc(r[9])+'">'
+  +'<label>Note</label><input id="xnote" type="text" value="'+esc(r[10])+'">'
+  +'<label>Your name</label><input id="xby" type="text" value="'+esc(nm)+'">'
+  +'<button type="button" id="xsave" onclick="saveLine('+row+',false)">Save changes</button>'
+  +'<button type="button" class="del" onclick="saveLine('+row+',true)">Delete this line</button>'
+  +'<button type="button" class="ghost" onclick="closeSheet()">Cancel</button><div id="xst"></div>');}
+function saveLine(row,del){var L=LEDGER,st=document.getElementById('xst'),by=document.getElementById('xby').value.trim();
+ if(by.length<2){st.innerHTML='<div class="msg err">Enter your name first.</div>';return;}
+ try{localStorage.setItem('wkmname',by);}catch(e){}
+ var ed={item:L.code,row:row,by:by};
+ if(del){if(!confirm('Delete this line from '+L.code+'? The balances below it will change.'))return;ed.del=true;}
+ else{var g=function(id){var e=document.getElementById(id);return e.readOnly?undefined:e.value;};
+  ed.fields={date:document.getElementById('xd').value,shift:segv('xsh'),inKg:g('xik'),outKg:g('xok'),inNo:g('xin'),outNo:g('xon'),
+   doc:document.getElementById('xdoc').value,order:document.getElementById('xord').value,desc:document.getElementById('xdesc').value,note:document.getElementById('xnote').value};
+  Object.keys(ed.fields).forEach(function(k){if(ed.fields[k]===undefined)delete ed.fields[k];});}
+ st.innerHTML='<div class="msg wait">'+(del?'Deleting…':'Saving…')+'</div>';
+ fetch(WKM_API,{method:'POST',body:JSON.stringify({action:'ledgeredit',admin:ADMIN,edit:ed}),redirect:'follow'}).then(function(r){return r.json();})
+  .then(function(j){if(!j||j.error){st.innerHTML='<div class="msg err">'+esc((j&&j.error)||'Not saved')+'</div>';return;}
+   closeSheet();INV=null;loadLedger();})
+  .catch(function(e){st.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';});}
 function seg(b){[].forEach.call(b.parentNode.children,function(x){x.classList.toggle('on',x===b);});}
 function segv(id){var b=document.querySelector('#'+id+' .on');return b?b.dataset.v:'';}
 function postEntry(){var L=LEDGER,st=document.getElementById('est'),b=document.getElementById('epost');
