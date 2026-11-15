@@ -51,6 +51,20 @@ body{padding-bottom:84px}
 .it .bd{flex:1;min-width:0}
 .it .cd1{font-weight:bold;font-size:16px}.it .nmz{font-size:14px;margin-top:2px}.it .art{font-family:monospace;font-size:12px;color:#555;margin-top:3px;word-break:break-all}
 .it .stk{margin-top:6px;font-size:15px}.it .stk b{font-size:17px}.it .zero{color:var(--bad);font-weight:bold}
+.ibt{display:flex;gap:6px;margin-top:8px}.ibt button{width:auto;flex:1;margin:0;padding:8px 6px;font-size:14px;background:#f1e6da;color:var(--acc)}
+.ibt button.ed{background:var(--acc);color:#fff}
+button.ghost{background:#fff;color:var(--acc);border:2px solid var(--acc)}
+.adm.on{background:#2e7d32;color:#fff;border-color:#2e7d32}
+#lsel{flex:1;min-width:0;width:auto}
+.lbal{margin-top:8px;font-size:16px}.art{font-family:monospace;font-size:12px;color:#555}
+.le{background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:6px;box-shadow:0 1px 2px rgba(0,0,0,.07);font-size:14px}
+.le .lt{display:flex;justify-content:space-between;gap:8px}.le .lb{color:var(--mut);font-size:12px;text-align:right}
+.le .lm{margin:4px 0;font-size:16px;font-weight:bold}.plus{color:var(--ok)}.minus{color:var(--bad)}
+#sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:40;display:flex;align-items:flex-end;justify-content:center}
+#sheet .shc{background:#fff;width:100%;max-width:520px;max-height:90vh;overflow:auto;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+#sheet h3{margin:0 0 6px}#sheet label{margin-top:10px}#sheet input[type=number],#sheet input[type=password]{width:100%;font-size:18px;padding:10px;border:1px solid #ccc;border-radius:8px}
+.edimg{height:180px;border-radius:10px;background:#f1ece6;display:flex;align-items:center;justify-content:center;color:#b9a99a;overflow:hidden;margin:6px 0}.edimg img{max-width:100%;max-height:100%}
+.seg{display:flex;gap:6px;margin-top:10px}.seg button{width:auto;flex:1;margin:0;background:#f1e6da;color:var(--acc)}.seg button.on{background:var(--acc);color:#fff}
 #zoom{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
 #zoom img{max-width:100%;max-height:80vh;border-radius:8px;background:#fff}#zcap{color:#fff;margin-top:10px;text-align:center;font-size:15px}
 </style></head><body><div class="wrap">
@@ -64,10 +78,18 @@ body{padding-bottom:84px}
 <div id="vInv" class="hide">
  <div class="card"><div class="invtop"><input id="iq" type="search" placeholder="Search code, name or article" oninput="drawInv()"><button type="button" id="irf" onclick="loadInv(true)">↻</button></div>
   <div class="chips"><button type="button" data-f="all" class="on" onclick="invFilter(this)">All</button><button type="button" data-f="in" onclick="invFilter(this)">In stock</button><button type="button" data-f="zero" onclick="invFilter(this)">Zero stock</button></div>
-  <div id="ist" class="nm" style="margin-top:8px">Enter the PIN above to see the inventory.</div></div>
+  <div id="ist" class="nm" style="margin-top:8px">Enter the PIN above to see the inventory.</div>
+  <button type="button" class="adm ghost" onclick="adminAsk()">🔒 Admin</button></div>
  <div id="ilist"></div>
 </div></div>
-<nav class="btabs"><button type="button" id="tChk" class="on" onclick="setView('chk')">📷<br>Daily check</button><button type="button" id="tInv" onclick="setView('inv')">📦<br>Inventory</button></nav>
+<div id="vLed" class="hide">
+ <div class="card"><div class="invtop"><select id="lsel" onchange="loadLedger()"><option value="">Choose an item…</option></select><button type="button" onclick="loadLedger()">↻</button></div>
+  <div id="lst" class="nm" style="margin-top:8px">Choose an item to see its statement.</div>
+  <button type="button" class="adm ghost" onclick="adminAsk()">🔒 Admin</button></div>
+ <div id="lout"></div>
+</div>
+<nav class="btabs"><button type="button" id="tChk" class="on" onclick="setView('chk')">📷<br>Daily check</button><button type="button" id="tInv" onclick="setView('inv')">📦<br>Inventory</button><button type="button" id="tLed" onclick="setView('led')">📒<br>Statement</button></nav>
+<div id="sheet" class="hide" onclick="if(event.target===this)closeSheet()"><div class="shc"><div id="shb"></div></div></div>
 <div id="zoom" class="hide" onclick="this.classList.add('hide')"><img id="zimg" alt=""><div id="zcap"></div></div>
 <script>
 /* Adapter: this page is hosted on GitHub Pages and talks to the WKM Stock Check Apps Script
@@ -154,9 +176,8 @@ function drawCal(){var sel=selDates(),ph=[],today=ymd(new Date());(window.LASTRO
  document.getElementById('dsel').innerHTML=sel.length?'Showing: <b>'+sel.map(nice).join(', ')+'</b> · <a href="#" onclick="setDates([]);return false">show all dates</a>':'No day picked – showing <b>all dates</b> on the photo.';}
 var INV=null,INVF='all',INVPIN='';
 function pinH(p){var h=5381;p='wkm|'+p;for(var i=0;i<p.length;i++)h=((h<<5)+h+p.charCodeAt(i))|0;return h;}   // saved list only shows again with the right PIN
-function setView(v){document.getElementById('vCheck').classList.toggle('hide',v!=='chk');document.getElementById('vInv').classList.toggle('hide',v!=='inv');
- document.getElementById('tChk').classList.toggle('on',v==='chk');document.getElementById('tInv').classList.toggle('on',v==='inv');
- try{localStorage.setItem('wkmview',v);}catch(e){} if(v==='inv')loadInv(false);window.scrollTo(0,0);}
+function setView(v){[['chk','vCheck','tChk'],['inv','vInv','tInv'],['led','vLed','tLed']].forEach(function(x){document.getElementById(x[1]).classList.toggle('hide',x[0]!==v);document.getElementById(x[2]).classList.toggle('on',x[0]===v);});
+ if(v==='inv')loadInv(false);if(v==='led')ledgerTab();window.scrollTo(0,0);}
 function loadInv(force){var pin=document.getElementById('pin').value.trim(),st=document.getElementById('ist');
  if(pin.length<4){st.innerHTML='Enter the PIN above to see the inventory.';return;}
  if(INV&&!force&&INVPIN===pin){drawInv();return;}
@@ -172,12 +193,120 @@ function drawInv(){if(!INV)return;var q=(document.getElementById('iq').value||''
   if(!q)return true;var hay=(i.code+' wkm'+i.no+' '+i.name+' '+i.size+' '+i.article+' '+i.material).toLowerCase();return q.split(' ').every(function(w){return hay.indexOf(w)>=0;});});
  document.getElementById('ist').innerHTML=list.length+' of '+INV.length+' items · live stock at '+esc(INV.at||'')+' · view only';
  var h='';list.forEach(function(i){var k=INV.indexOf(i),has=(Number(i.kg)||0)>0||(Number(i.nos)||0)>0;
-  h+='<div class="it"><div class="ph"'+(i.img?' onclick="zoomInv('+k+')"':'')+'>'+(i.img?'<img loading="lazy" referrerpolicy="no-referrer" src="'+esc(i.img)+'" alt="">':'no picture')+'</div><div class="bd">'
+  h+='<div class="it"><div class="ph"'+(i.img?' data-r="'+i.r+'" onclick="zoomInv('+k+')"':'')+'>'+(i.img?'…':'no picture')+'</div><div class="bd">'
    +'<div class="cd1">'+esc(i.code)+'</div><div class="nmz">'+esc(i.name)+(i.size?' · '+esc(i.size):'')+'</div>'
    +(i.article?'<div class="art">'+esc(i.article)+(i.material?' · '+esc(i.material):'')+'</div>':'')
-   +'<div class="stk">'+(has?'<b>'+invQty(i.kg,i.kgU||'KG')+'</b> &nbsp;·&nbsp; <b>'+invQty(i.nos,i.nosU||'NO')+'</b>':'<span class="zero">Out of stock</span>')+'</div></div></div>';});
- document.getElementById('ilist').innerHTML=h||'<div class="card">Nothing matches.</div>';}
-function zoomInv(k){var i=INV[k];if(!i||!i.img)return;document.getElementById('zimg').src=i.img;document.getElementById('zcap').innerHTML='<b>'+esc(i.code)+'</b> · '+esc(i.name)+(i.size?' · '+esc(i.size):'')+'<br>'+esc(i.article||'');document.getElementById('zoom').classList.remove('hide');}
+   +'<div class="stk">'+(has?'<b>'+invQty(i.kg,i.kgU||'KG')+'</b> &nbsp;·&nbsp; <b>'+invQty(i.nos,i.nosU||'NO')+'</b>':'<span class="zero">Out of stock</span>')+'</div>'
+   +'<div class="ibt"><button type="button" onclick="openLedger(\''+esc(i.code)+'\')">📒 Statement</button>'+(ADMIN?'<button type="button" class="ed" onclick="editItem('+k+')">✎ Edit</button>':'')+'</div></div></div>';});
+ document.getElementById('ilist').innerHTML=h||'<div class="card">Nothing matches.</div>';imgWatch();}
+function zoomInv(k){var i=INV[k];if(!i||!IMGC[i.r])return;document.getElementById('zimg').src=IMGC[i.r];document.getElementById('zcap').innerHTML='<b>'+esc(i.code)+'</b> · '+esc(i.name)+(i.size?' · '+esc(i.size):'')+'<br>'+esc(i.article||'');document.getElementById('zoom').classList.remove('hide');}
+/* ---------- pictures (sent by the server, loaded as you scroll) ---------- */
+var IMGC={},IMGQ=[],IMGBUSY=0,IMGOBS=null;
+function api(body){body.pin=document.getElementById('pin').value.trim();return fetch(WKM_API,{method:'POST',body:JSON.stringify(body),redirect:'follow'}).then(function(r){if(!r.ok)throw new Error('Server error '+r.status);return r.json();});}
+function imgWatch(){if(!('IntersectionObserver' in window)){[].forEach.call(document.querySelectorAll('.ph[data-r]'),function(e){imgNeed(+e.dataset.r);});return;}
+ if(!IMGOBS)IMGOBS=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){IMGOBS.unobserve(e.target);imgNeed(+e.target.dataset.r);}});},{rootMargin:'300px'});
+ [].forEach.call(document.querySelectorAll('.ph[data-r]'),function(e){var r=+e.dataset.r;if(IMGC[r]!==undefined)imgPut(r);else IMGOBS.observe(e);});}
+function imgNeed(r){if(IMGC[r]!==undefined){imgPut(r);return;}if(IMGQ.indexOf(r)<0)IMGQ.push(r);imgPump();}
+function imgPump(){while(IMGBUSY<3&&IMGQ.length){var b=IMGQ.splice(0,6);IMGBUSY++;
+ api({action:'imgs',rows:b}).then(function(j){var m=(j&&j.imgs)||{};b.forEach(function(r){IMGC[r]=m[r]||'';imgPut(r);});})
+  .catch(function(){b.forEach(function(r){delete IMGC[r];});}).then(function(){IMGBUSY--;imgPump();});}}
+function imgPut(r){[].forEach.call(document.querySelectorAll('.ph[data-r="'+r+'"]'),function(e){e.innerHTML=IMGC[r]?'<img src="'+IMGC[r]+'" alt="">':'no picture';});}
+
+/* ---------- admin mode (separate admin code, kept in memory only) ---------- */
+var ADMIN='';
+function adminAsk(){if(ADMIN){ADMIN='';adminUi();return;}
+ openSheet('<h3>Admin</h3><label>Admin code</label><input id="acode" type="password" inputmode="numeric" autocomplete="off" placeholder="Admin code"><button type="button" onclick="adminTry()">Unlock</button><div id="ast"></div>');
+ setTimeout(function(){var i=document.getElementById('acode');if(i)i.focus();},50);}
+function adminTry(){var c=document.getElementById('acode').value.trim(),st=document.getElementById('ast');if(!c)return;st.innerHTML='<div class="msg wait">Checking…</div>';
+ fetch(WKM_API,{method:'POST',body:JSON.stringify({action:'admincheck',admin:c}),redirect:'follow'}).then(function(r){return r.json();})
+  .then(function(j){if(j&&j.ok){ADMIN=c;closeSheet();adminUi();}else st.innerHTML='<div class="msg err">Wrong admin code</div>';})
+  .catch(function(e){st.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';});}
+function adminUi(){[].forEach.call(document.querySelectorAll('.adm'),function(b){b.textContent=ADMIN?'🔓 Admin on – lock':'🔒 Admin';b.classList.toggle('on',!!ADMIN);});
+ document.body.classList.toggle('isadmin',!!ADMIN);drawInv();if(LEDGER)drawLedger();}
+
+/* bottom sheet used for admin code, edit item, add entry */
+function openSheet(h){document.getElementById('shb').innerHTML=h;document.getElementById('sheet').classList.remove('hide');}
+function closeSheet(){document.getElementById('sheet').classList.add('hide');document.getElementById('shb').innerHTML='';}
+
+/* ---------- edit an item (admin) ---------- */
+var EDITB64='';
+function editItem(k){var i=INV[k];if(!i||!ADMIN)return;EDITB64='';
+ openSheet('<h3>Edit '+esc(i.code)+'</h3>'
+  +'<div class="edimg" id="edimg">'+(IMGC[i.r]?'<img src="'+IMGC[i.r]+'" alt="">':'no picture')+'</div>'
+  +'<label class="pick">📷 New picture<input id="edfile" type="file" accept="image/*" onchange="editPic(this)"></label>'
+  +'<label>Item name</label><input id="edname" type="text" value="'+esc(i.name)+'">'
+  +'<label>Dm / size</label><input id="edsize" type="text" value="'+esc(i.size)+'">'
+  +'<label>Article / item code</label><input id="edart" type="text" value="'+esc(i.article)+'">'
+  +'<label>Material</label><input id="edmat" type="text" value="'+esc(i.material)+'">'
+  +'<div class="nm" style="margin-top:8px">Stock is not edited here – it comes from the inventory statement.</div>'
+  +'<button type="button" id="edsave" onclick="editSave('+k+')">Save</button><button type="button" class="ghost" onclick="closeSheet()">Cancel</button><div id="edst"></div>');}
+function editPic(inp){var f=inp.files[0];if(!f)return;var st=document.getElementById('edst');
+ shrinkTo(f,900,function(b64){if(!b64){st.innerHTML='<div class="msg err">Could not open that picture</div>';return;}EDITB64=b64;document.getElementById('edimg').innerHTML='<img src="data:image/jpeg;base64,'+b64+'" alt="">';});}
+function shrinkTo(file,max,cb){var img=new Image(),url=URL.createObjectURL(file);img.onload=function(){var w=img.width,h=img.height,k=Math.min(1,max/Math.max(w,h));var c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);cb(c.toDataURL('image/jpeg',0.85).split(',')[1]);};img.onerror=function(){cb('');};img.src=url;}
+function editSave(k){var i=INV[k],st=document.getElementById('edst'),b=document.getElementById('edsave');
+ var d={code:i.code,name:document.getElementById('edname').value,size:document.getElementById('edsize').value,article:document.getElementById('edart').value,material:document.getElementById('edmat').value};
+ if(EDITB64){d.b64=EDITB64;d.mime='image/jpeg';}
+ b.disabled=true;st.innerHTML='<div class="msg wait">Saving…</div>';
+ fetch(WKM_API,{method:'POST',body:JSON.stringify({action:'itemsave',admin:ADMIN,item:d}),redirect:'follow'}).then(function(r){return r.json();})
+  .then(function(j){b.disabled=false;if(!j||j.error){st.innerHTML='<div class="msg err">'+esc((j&&j.error)||'Not saved')+'</div>';return;}
+   i.name=d.name.trim();i.size=d.size.trim();i.article=d.article.trim();i.material=d.material.trim();if(EDITB64)IMGC[i.r]='data:image/jpeg;base64,'+EDITB64;
+   closeSheet();drawInv();loadInv(true);})
+  .catch(function(e){b.disabled=false;st.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';});}
+
+/* ---------- inventory statement (view for everyone with the PIN, add entry = admin) ---------- */
+var LEDGER=null;
+function openLedger(code){setView('led');var s=document.getElementById('lsel');if(code){fillLedgerSel();s.value=code;}loadLedger();}
+function fillLedgerSel(){var s=document.getElementById('lsel');if(!INV||s.options.length>1)return;var cur=s.value;
+ s.innerHTML='<option value="">Choose an item…</option>'+INV.map(function(i){return '<option value="'+esc(i.code)+'">'+esc(i.code+' · '+i.name+(i.size?' '+i.size:''))+'</option>';}).join('');s.value=cur;}
+function ledgerTab(){if(!INV){loadInv(false);var w=setInterval(function(){if(INV){clearInterval(w);fillLedgerSel();}},500);setTimeout(function(){clearInterval(w);},20000);}else fillLedgerSel();}
+function loadLedger(){var code=document.getElementById('lsel').value,st=document.getElementById('lst');LEDGER=null;document.getElementById('lout').innerHTML='';
+ if(!code){st.innerHTML='Choose an item to see its statement.';return;}
+ if(document.getElementById('pin').value.trim().length<4){st.innerHTML='Enter the PIN above first.';return;}
+ st.innerHTML='Loading statement…';
+ api({action:'ledger',item:code}).then(function(j){if(!j||j.error){st.innerHTML='<span class="bad">'+esc((j&&j.error)||'Could not load')+'</span>';return;}LEDGER=j;drawLedger();})
+  .catch(function(e){st.innerHTML='<span class="bad">'+esc(e.message||e)+'</span>';});}
+function lnum(x){return String(x||'').replace(/[,\s]/g,'')!==''&&Number(String(x).replace(/,/g,''))!==0;}
+function drawLedger(){var L=LEDGER;if(!L)return;
+ document.getElementById('lst').innerHTML='<b>'+esc(L.code)+'</b> · '+esc(L.name)+(L.size?' · '+esc(L.size):'')+(L.article?'<br><span class="art">'+esc(L.article)+'</span>':'')
+  +'<div class="lbal">Balance now: <b>'+esc(L.balKg||'0')+'</b> '+esc(L.kgU)+' &nbsp;·&nbsp; <b>'+esc(L.balNos||'0')+'</b> '+esc(L.nosU)+'</div>'
+  +'<div class="nm">'+L.total+' entries'+(L.total>L.rows.length?' · showing the last '+L.rows.length:'')+' · newest first</div>'
+  +(ADMIN?'<button type="button" onclick="addEntry()">＋ Add entry to this statement</button>':'');
+ var h='';L.rows.slice().reverse().forEach(function(r){var mv=[];
+  if(lnum(r[1]))mv.push('<span class="plus">+'+esc(r[1])+' '+esc(L.kgU)+'</span>');if(lnum(r[2]))mv.push('<span class="minus">−'+esc(r[2])+' '+esc(L.kgU)+'</span>');
+  if(lnum(r[4]))mv.push('<span class="plus">+'+esc(r[4])+' '+esc(L.nosU)+'</span>');if(lnum(r[5]))mv.push('<span class="minus">−'+esc(r[5])+' '+esc(L.nosU)+'</span>');
+  var info=[];if(r[7])info.push('Doc '+esc(r[7]));if(r[8])info.push('Order '+esc(r[8]));if(r[9])info.push(esc(r[9]));if(r[10])info.push(esc(r[10]));
+  h+='<div class="le"><div class="lt"><b>'+esc(r[0])+'</b>'+(r[11]?' · '+(String(r[11]).charAt(0)==='N'?'Night':'Day'):'')+'<span class="lb">bal '+esc(r[3]||'')+' '+esc(L.kgU)+(r[6]!==''?' / '+esc(r[6])+' '+esc(L.nosU):'')+'</span></div>'
+   +'<div class="lm">'+(mv.join(' &nbsp; ')||'<span class="nm">no movement</span>')+'</div>'+(info.length?'<div class="nm">'+info.join(' · ')+'</div>':'')+'</div>';});
+ document.getElementById('lout').innerHTML=h||'<div class="card">No entries yet.</div>';}
+function addEntry(){var L=LEDGER;if(!L||!ADMIN)return;var t=new Date(),td=t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2);
+ var ords=[].map.call(document.getElementById('ord').options,function(o){return o.value?'<option value="'+esc(o.value)+'">'+esc(o.text)+'</option>':'';}).join('');
+ var nm='';try{nm=localStorage.getItem('wkmname')||'';}catch(e){}
+ openSheet('<h3>Add entry · '+esc(L.code)+'</h3><div class="nm">'+esc(L.name)+(L.size?' · '+esc(L.size):'')+'</div>'
+  +'<div class="seg" id="edir"><button type="button" class="on" data-v="in" onclick="seg(this)">＋ IN</button><button type="button" data-v="out" onclick="seg(this)">− OUT</button></div>'
+  +'<label>Quantity</label><div class="two"><input id="eq" type="number" inputmode="decimal" min="0" step="any"><select id="eu" style="max-width:120px"><option value="KG">'+esc(L.kgU||'KG')+'</option><option value="NO">'+esc(L.nosU||'NO')+'</option></select></div>'
+  +'<label>Date</label><input id="ed" type="date" value="'+td+'" max="'+td+'">'
+  +'<label>Shift</label><div class="seg" id="esh"><button type="button" class="on" data-v="D" onclick="seg(this)">Day</button><button type="button" data-v="N" onclick="seg(this)">Night</button></div>'
+  +'<label>Doc No.</label><input id="edoc" type="text">'
+  +'<label>Order</label><select id="eord"><option value="">(none)</option>'+ords+'</select>'
+  +'<label>Supplier / customer</label><input id="epty" type="text">'
+  +'<label>Note</label><input id="enote" type="text">'
+  +'<label>Your name</label><input id="eby" type="text" value="'+esc(nm)+'">'
+  +'<button type="button" id="epost" onclick="postEntry()">Post to statement</button><button type="button" class="ghost" onclick="closeSheet()">Cancel</button><div id="est"></div>');}
+function seg(b){[].forEach.call(b.parentNode.children,function(x){x.classList.toggle('on',x===b);});}
+function segv(id){var b=document.querySelector('#'+id+' .on');return b?b.dataset.v:'';}
+function postEntry(){var L=LEDGER,st=document.getElementById('est'),b=document.getElementById('epost');
+ var e={item:L.code,dir:segv('edir'),qty:document.getElementById('eq').value,unit:document.getElementById('eu').value,date:document.getElementById('ed').value,shift:segv('esh'),
+  doc:document.getElementById('edoc').value,order:document.getElementById('eord').value,party:document.getElementById('epty').value,note:document.getElementById('enote').value,by:document.getElementById('eby').value};
+ if(!(Number(e.qty)>0)){st.innerHTML='<div class="msg err">Enter a quantity</div>';return;}
+ if(!confirm((e.dir==='in'?'IN  +':'OUT  −')+e.qty+' '+(e.unit==='KG'?L.kgU:L.nosU)+' on '+L.code+' ('+nice(e.date)+', '+(e.shift==='N'?'Night':'Day')+')?'))return;
+ try{localStorage.setItem('wkmname',e.by.trim());}catch(x){}
+ b.disabled=true;st.innerHTML='<div class="msg wait">Posting…</div>';
+ fetch(WKM_API,{method:'POST',body:JSON.stringify({action:'adminpost',admin:ADMIN,entry:e}),redirect:'follow'}).then(function(r){return r.json();})
+  .then(function(j){b.disabled=false;if(!j||j.error){st.innerHTML='<div class="msg err">'+esc((j&&j.error)||'Not posted')+'</div>';return;}
+   if(!j.ok){st.innerHTML='<div class="msg err">'+esc((j.errors||[]).join(', ')||'Not posted')+'</div>';return;}
+   closeSheet();loadLedger();INV=null;})
+  .catch(function(x){b.disabled=false;st.innerHTML='<div class="msg err">'+esc(x.message||x)+'</div>';});}
+
 function fmtd(n){n=Math.round(n*100)/100;return (n>0?'+':'')+n;}
 function show(all){[].forEach.call(document.querySelectorAll('.rsh'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r&&i.value){r.shift=i.value;r._shAssumed=false;}});[].forEach.call(document.querySelectorAll('.rn'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.note=i.value.trim();});[].forEach.call(document.querySelectorAll('.rd'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.doc=i.value.trim();});[].forEach.call(document.querySelectorAll('.rp'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.party=i.value.trim();});window.LASTROWS=all;drawCal();var sel=document.getElementById('dt').value;var shf='';var rows=all.filter(function(r){if(sel&&sel.split(',').indexOf(r.date)<0)return false;if(!r.shift||r._shAssumed){r.shift=shf;r._shAssumed=true;}if(shf&&r.shift!==shf)return false;return true;});
  if(!rows.length&&all.length){var ds=[];all.forEach(function(r){if(r.date&&ds.indexOf(r.date)<0)ds.push(r.date);});document.getElementById('out').innerHTML='<div class="card">No entries for <b>'+esc(sel.split(',').map(nice).join(', '))+(shf?' · '+(shf==='N'?'Night':'Day')+' shift':'')+'</b> on this photo.'+(ds.length?'<br>Dates on the photo: '+ds.map(nice).join(', ')+'. Tap those days in the calendar to see them (green dot = on the photo).':'')+'</div>';return;}
