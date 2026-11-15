@@ -85,7 +85,7 @@ button.del{background:#fff;color:var(--bad);border:2px solid var(--bad)}
 <div id="vInv" class="hide">
  <div class="card"><div class="invtop"><input id="iq" type="search" placeholder="Search code, name or article" oninput="drawInv()"><button type="button" id="irf" onclick="loadInv(true)">↻</button></div>
   <div class="chips"><button type="button" data-f="all" class="on" onclick="invFilter(this)">All</button><button type="button" data-f="in" onclick="invFilter(this)">In stock</button><button type="button" data-f="zero" onclick="invFilter(this)">Zero stock</button></div>
-  <div id="ist" class="nm" style="margin-top:8px">Enter the PIN above to see the inventory.</div></div>
+  <div id="ist" class="nm" style="margin-top:8px">Enter the PIN above to see the inventory.</div><div id="ipg" class="nm" style="color:var(--acc)"></div></div>
  <div id="ilist"></div>
 </div></div>
 <div id="vLed" class="hide">
@@ -198,28 +198,49 @@ function drawInv(){if(!INV)return;var q=(document.getElementById('iq').value||''
   if(!q)return true;var hay=(i.code+' wkm'+i.no+' '+i.name+' '+i.size+' '+i.article+' '+i.material).toLowerCase();return q.split(' ').every(function(w){return hay.indexOf(w)>=0;});});
  document.getElementById('ist').innerHTML=list.length+' of '+INV.length+' items · live stock at '+esc(INV.at||'')+' · view only';
  var h='';list.forEach(function(i){var k=INV.indexOf(i),has=(Number(i.kg)||0)>0||(Number(i.nos)||0)>0;
-  h+='<div class="it"><div class="ph"'+(i.img?' data-r="'+i.r+'" onclick="zoomInv('+k+')"':'')+'>'+(i.img?'…':'no picture')+'</div><div class="bd">'
+  h+='<div class="it"><div class="ph"'+(i.img?' data-c="'+esc(i.code)+'" onclick="zoomInv('+k+')"':'')+'>'+(i.img?'…':'no picture')+'</div><div class="bd">'
    +'<div class="cd1">'+esc(i.code)+'</div><div class="nmz">'+esc(i.name)+(i.size?' · '+esc(i.size):'')+'</div>'
    +(i.article?'<div class="art">'+esc(i.article)+(i.material?' · '+esc(i.material):'')+'</div>':'')
    +'<div class="stk">'+(has?'<b>'+invQty(i.kg,i.kgU||'KG')+'</b> &nbsp;·&nbsp; <b>'+invQty(i.nos,i.nosU||'NO')+'</b>':'<span class="zero">Out of stock</span>')+'</div>'
    +'<div class="ibt"><button type="button" onclick="openLedger(\''+esc(i.code)+'\')">📒 Statement</button>'+(ADMIN?'<button type="button" class="ed" onclick="editItem('+k+')">✎ Edit</button>':'')+'</div></div></div>';});
- document.getElementById('ilist').innerHTML=h||'<div class="card">Nothing matches.</div>';imgWatch();}
-function zoomInv(k){var i=INV[k];if(!i||!IMGC[i.r])return;document.getElementById('zimg').src=IMGC[i.r];document.getElementById('zcap').innerHTML='<b>'+esc(i.code)+'</b> · '+esc(i.name)+(i.size?' · '+esc(i.size):'')+'<br>'+esc(i.article||'');document.getElementById('zoom').classList.remove('hide');}
-/* ---------- pictures (sent by the server, loaded as you scroll) ---------- */
-var IMGC={},IMGQ=[],IMGBUSY=0,IMGOBS=null;
+ document.getElementById('ilist').innerHTML=h||'<div class="card">Nothing matches.</div>';imgWatch();imgFill();}
+function zoomInv(k){var i=INV[k];if(!i||!IMGC[i.code])return;document.getElementById('zimg').src=IMGC[i.code];document.getElementById('zcap').innerHTML='<b>'+esc(i.code)+'</b> · '+esc(i.name)+(i.size?' · '+esc(i.size):'')+'<br>'+esc(i.article||'');document.getElementById('zoom').classList.remove('hide');}
+/* ---------- pictures: kept in the phone's own storage (IndexedDB) ----------
+   First time: every picture is downloaded once (in the background). After that only the stock numbers are loaded.
+   A stored picture is re-downloaded when the admin changes it (version number) or when it is older than 7 days. */
+var IMGC={},IMGQ=[],IMGBUSY=0,IMGOBS=null,IMGTRY={},IMGPEND={},IDBP=null,WEEK=7*24*3600e3;
 function api(body){body.pin=document.getElementById('pin').value.trim();return fetch(WKM_API,{method:'POST',body:JSON.stringify(body),redirect:'follow'}).then(function(r){if(!r.ok)throw new Error('Server error '+r.status);return r.json();});}
-function imgWatch(){if(!('IntersectionObserver' in window)){[].forEach.call(document.querySelectorAll('.ph[data-r]'),function(e){imgNeed(+e.dataset.r);});return;}
- if(!IMGOBS)IMGOBS=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){IMGOBS.unobserve(e.target);imgNeed(+e.target.dataset.r);}});},{rootMargin:'300px'});
- [].forEach.call(document.querySelectorAll('.ph[data-r]'),function(e){var r=+e.dataset.r;if(IMGC[r]!==undefined)imgPut(r);else IMGOBS.observe(e);});}
-function imgNeed(r){if(IMGC[r]!==undefined){imgPut(r);return;}if(IMGQ.indexOf(r)<0)IMGQ.push(r);imgPump();}
-var IMGTRY={};
-function imgPump(){while(IMGBUSY<2&&IMGQ.length){var b=IMGQ.splice(0,6);IMGBUSY++;
- api({action:'imgs',rows:b}).then(function(j){var m=(j&&j.imgs)||{};b.forEach(function(r){
-   if(m[r]!==undefined){IMGC[r]=m[r];imgPut(r);return;}                         // picture or confirmed "no picture"
-   IMGTRY[r]=(IMGTRY[r]||0)+1;if(IMGTRY[r]<4)setTimeout(function(){imgNeed(r);},2500*IMGTRY[r]);});})   // server busy: try again
-  .catch(function(){b.forEach(function(r){IMGTRY[r]=(IMGTRY[r]||0)+1;if(IMGTRY[r]<4)setTimeout(function(){imgNeed(r);},3000);});})
-  .then(function(){IMGBUSY--;imgPump();});}}
-function imgPut(r){[].forEach.call(document.querySelectorAll('.ph[data-r="'+r+'"]'),function(e){e.innerHTML=IMGC[r]?'<img src="'+IMGC[r]+'" alt="">':'no picture';});}
+function idb(){if(IDBP)return IDBP;IDBP=new Promise(function(res){try{var q=indexedDB.open('wkm-stock',1);q.onupgradeneeded=function(){q.result.createObjectStore('img');};q.onsuccess=function(){res(q.result);};q.onerror=function(){res(null);};}catch(e){res(null);}});
+ try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();}catch(e){}return IDBP;}
+function idbGet(k){return idb().then(function(db){if(!db)return null;return new Promise(function(res){try{var r=db.transaction('img').objectStore('img').get(k);r.onsuccess=function(){res(r.result||null);};r.onerror=function(){res(null);};}catch(e){res(null);}});});}
+function idbPut(k,v){idb().then(function(db){if(db)try{db.transaction('img','readwrite').objectStore('img').put(v,k);}catch(e){}});}
+function idbDel(k){idb().then(function(db){if(db)try{db.transaction('img','readwrite').objectStore('img').delete(k);}catch(e){}});}
+function invBy(c){if(!INV)return null;for(var i=0;i<INV.length;i++)if(INV[i].code===c)return INV[i];return null;}
+function imgWatch(){var els=document.querySelectorAll('.ph[data-c]');
+ if(!('IntersectionObserver' in window)){[].forEach.call(els,function(e){imgNeed(e.dataset.c,true);});return;}
+ if(!IMGOBS)IMGOBS=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){IMGOBS.unobserve(e.target);imgNeed(e.target.dataset.c,true);}});},{rootMargin:'300px'});
+ [].forEach.call(els,function(e){var c=e.dataset.c;if(IMGC[c]!==undefined)imgPut(c);else IMGOBS.observe(e);});}
+/* look in the phone first; only ask the server when missing, changed by admin, or a week old */
+function imgNeed(c,front){if(IMGC[c]!==undefined&&!IMGPEND[c]){imgPut(c);return;}var it=invBy(c);if(!it)return;
+ if(!it.img){IMGC[c]='';idbDel(c);imgPut(c);return;}
+ idbGet(c).then(function(v){
+  if(v&&v.d){IMGC[c]=v.d;imgPut(c);if(v.pv===it.pv&&Date.now()-v.t<WEEK)return;}       // stored and up to date: no download
+  imgQueue(c,front);});}
+function imgQueue(c,front){if(IMGPEND[c])return;IMGPEND[c]=1;if(front)IMGQ.unshift(c);else IMGQ.push(c);imgPump();}
+function imgPump(){while(IMGBUSY<2&&IMGQ.length){var b=IMGQ.splice(0,6),rows=[],byR={};
+ b.forEach(function(c){var it=invBy(c);if(it){rows.push(it.r);byR[it.r]=c;}else delete IMGPEND[c];});if(!rows.length)continue;IMGBUSY++;
+ (function(b,rows,byR){api({action:'imgs',rows:rows}).then(function(j){var m=(j&&j.imgs)||{};rows.forEach(function(r){var c=byR[r],it=invBy(c);delete IMGPEND[c];
+    if(m[r]!==undefined){IMGC[c]=m[r];imgPut(c);if(m[r])idbPut(c,{d:m[r],pv:it?it.pv:0,t:Date.now()});else idbDel(c);return;}
+    IMGTRY[c]=(IMGTRY[c]||0)+1;if(IMGTRY[c]<4)setTimeout(function(){imgQueue(c,false);},2500*IMGTRY[c]);});})
+  .catch(function(){b.forEach(function(c){delete IMGPEND[c];IMGTRY[c]=(IMGTRY[c]||0)+1;if(IMGTRY[c]<4)setTimeout(function(){imgQueue(c,false);},3000);});})
+  .then(function(){IMGBUSY--;imgPump();imgProgress();});})(b,rows,byR);}}
+function imgPut(c){[].forEach.call(document.querySelectorAll('.ph[data-c="'+c+'"]'),function(e){e.innerHTML=IMGC[c]?'<img src="'+IMGC[c]+'" alt="">':'no picture';});}
+/* after the list is shown: fill the phone with every picture not stored yet (or changed / older than a week) */
+var IMGFILL=false;
+function imgFill(){if(IMGFILL||!INV)return;IMGFILL=true;var list=INV.filter(function(i){return i.img;}),n=0;
+ (function next(){if(n>=list.length){IMGFILL=false;return;}var it=list[n++];
+  idbGet(it.code).then(function(v){if(!(v&&v.d&&v.pv===it.pv&&Date.now()-v.t<WEEK))imgQueue(it.code,false);else if(IMGC[it.code]===undefined)IMGC[it.code]=v.d;next();});})();}
+function imgProgress(){var e=document.getElementById('ipg');if(!e)return;var left=IMGQ.length+IMGBUSY*6;e.textContent=left>0?'Saving pictures on this phone… ('+left+' left)':'';}
 
 /* ---------- admin mode (separate admin code, kept in memory only) ---------- */
 var ADMIN='';
@@ -238,11 +259,13 @@ function openSheet(h){document.getElementById('shb').innerHTML=h;document.getEle
 function closeSheet(){document.getElementById('sheet').classList.add('hide');document.getElementById('shb').innerHTML='';}
 
 /* ---------- edit an item (admin) ---------- */
-var EDITB64='';
-function editItem(k){var i=INV[k];if(!i||!ADMIN)return;EDITB64='';
+var EDITB64='',EDITDEL=false;
+function editNoPic(){EDITB64='';EDITDEL=true;var f=document.getElementById('edfile');if(f)f.value='';document.getElementById('edimg').innerHTML='picture will be removed when you tap Save';}
+function editItem(k){var i=INV[k];if(!i||!ADMIN)return;EDITB64='';EDITDEL=false;
  openSheet('<h3>Edit '+esc(i.code)+'</h3>'
-  +'<div class="edimg" id="edimg">'+(IMGC[i.r]?'<img src="'+IMGC[i.r]+'" alt="">':'no picture')+'</div>'
-  +'<label class="pick">📷 New picture<input id="edfile" type="file" accept="image/*" onchange="editPic(this)"></label>'
+  +'<div class="edimg" id="edimg">'+(IMGC[i.code]?'<img src="'+IMGC[i.code]+'" alt="">':'no picture')+'</div>'
+  +'<div class="two"><label class="pick" style="flex:1">📷 New picture<input id="edfile" type="file" accept="image/*" onchange="editPic(this)"></label>'
+  +(i.img?'<button type="button" class="del" style="width:auto;flex:0 0 auto;margin:0;padding:0 14px" onclick="editNoPic()">🗑 Remove</button>':'')+'</div>'
   +'<label>Item name</label><input id="edname" type="text" value="'+esc(i.name)+'">'
   +'<label>Dm / size</label><input id="edsize" type="text" value="'+esc(i.size)+'">'
   +'<label>Article / item code</label><input id="edart" type="text" value="'+esc(i.article)+'">'
@@ -250,15 +273,16 @@ function editItem(k){var i=INV[k];if(!i||!ADMIN)return;EDITB64='';
   +'<div class="nm" style="margin-top:8px">Stock is not edited here – it comes from the inventory statement.</div>'
   +'<button type="button" id="edsave" onclick="editSave('+k+')">Save</button><button type="button" class="ghost" onclick="closeSheet()">Cancel</button><div id="edst"></div>');}
 function editPic(inp){var f=inp.files[0];if(!f)return;var st=document.getElementById('edst');
- shrinkTo(f,900,function(b64){if(!b64){st.innerHTML='<div class="msg err">Could not open that picture</div>';return;}EDITB64=b64;document.getElementById('edimg').innerHTML='<img src="data:image/jpeg;base64,'+b64+'" alt="">';});}
+ shrinkTo(f,900,function(b64){if(!b64){st.innerHTML='<div class="msg err">Could not open that picture</div>';return;}EDITB64=b64;EDITDEL=false;document.getElementById('edimg').innerHTML='<img src="data:image/jpeg;base64,'+b64+'" alt="">';});}
 function shrinkTo(file,max,cb){var img=new Image(),url=URL.createObjectURL(file);img.onload=function(){var w=img.width,h=img.height,k=Math.min(1,max/Math.max(w,h));var c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);cb(c.toDataURL('image/jpeg',0.85).split(',')[1]);};img.onerror=function(){cb('');};img.src=url;}
 function editSave(k){var i=INV[k],st=document.getElementById('edst'),b=document.getElementById('edsave');
  var d={code:i.code,name:document.getElementById('edname').value,size:document.getElementById('edsize').value,article:document.getElementById('edart').value,material:document.getElementById('edmat').value};
- if(EDITB64){d.b64=EDITB64;d.mime='image/jpeg';}
+ if(EDITB64){d.b64=EDITB64;d.mime='image/jpeg';}else if(EDITDEL){if(!confirm('Remove the picture of '+i.code+'?'))return;d.delPic=true;}
  b.disabled=true;st.innerHTML='<div class="msg wait">Saving…</div>';
  fetch(WKM_API,{method:'POST',body:JSON.stringify({action:'itemsave',admin:ADMIN,item:d}),redirect:'follow'}).then(function(r){return r.json();})
   .then(function(j){b.disabled=false;if(!j||j.error){st.innerHTML='<div class="msg err">'+esc((j&&j.error)||'Not saved')+'</div>';return;}
-   i.name=d.name.trim();i.size=d.size.trim();i.article=d.article.trim();i.material=d.material.trim();if(EDITB64)IMGC[i.r]='data:image/jpeg;base64,'+EDITB64;
+   i.name=d.name.trim();i.size=d.size.trim();i.article=d.article.trim();i.material=d.material.trim();if(EDITB64){IMGC[i.code]='data:image/jpeg;base64,'+EDITB64;i.img='x';idbPut(i.code,{d:IMGC[i.code],pv:(i.pv||0)+1,t:Date.now()});}
+   if(EDITDEL){IMGC[i.code]='';i.img='';idbDel(i.code);}
    closeSheet();drawInv();loadInv(true);})
   .catch(function(e){b.disabled=false;st.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';});}
 
