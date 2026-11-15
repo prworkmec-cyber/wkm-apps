@@ -24,16 +24,22 @@
   .card b{font-size:17px}
   #save{width:100%;margin-top:20px;font-size:20px;padding:16px;background:#188038;color:#fff;border:0;border-radius:8px}
   #save:disabled{background:#9e9e9e}
+  .tabs{display:flex;gap:0;margin:4px 0 6px;border-bottom:2px solid #1a73e8}
+  .tabs button{flex:1;font-size:17px;padding:12px;border:0;background:#e8eef7;color:#1a73e8;font-weight:bold;border-radius:8px 8px 0 0;margin-right:4px}
+  .tabs button:last-child{margin-right:0}
+  .tabs button.on{background:#1a73e8;color:#fff}
+  .hide{display:none}
   #msg{margin-top:14px;font-size:15px;text-align:center;white-space:pre-line}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Qatalum – Daily Production</h1>
+  <div class="tabs"><button id="tProd" class="on">Production</button><button id="tCtr">Counters</button></div>
   <label>Date</label>
   <input type="date" id="date">
-  <label>Shift</label>
-  <div class="shift"><button id="Day" class="on">Day</button><button id="Night">Night</button></div>
+  <div id="shiftBox"><label>Shift</label>
+  <div class="shift"><button id="Day" class="on">Day</button><button id="Night">Night</button></div></div>
   <div id="fields"></div>
   <div class="card" id="sum"></div>
   <button id="save">Save</button>
@@ -53,7 +59,7 @@
     ['cages', 'Complete cages', 'Made this shift', 'qty'],
     ['spn', 'Spider rings – normal', '', 'qty'],
     ['spi', 'Spider rings – inverted', '', 'qty'],
-    ['arms', 'Arms counter', 'Machine counter readings (once a day)', 'ctr'],
+    ['arms', 'Arms counter', 'Machine counter readings (once a day, same for both shifts)', 'ctr'],
     ['small', 'Small rings counter', '', 'ctr'],
     ['wire', 'Long wire counter', '', 'ctr']
   ];
@@ -67,12 +73,26 @@
 
   let h = '';
   F.forEach(f => {
-    if (f[2]) h += '<h2>' + f[2] + '</h2>';
-    h += '<label>' + f[1] + '</label><input type="number" inputmode="numeric" min="0" id="f_' + f[0] + '">' +
-         '<div class="live" id="l_' + f[0] + '"></div>';
+    h += '<div class="fld ' + f[3] + '">' + (f[2] ? '<h2>' + f[2] + '</h2>' : '') +
+         '<label>' + f[1] + '</label><input type="number" inputmode="numeric" min="0" id="f_' + f[0] + '">' +
+         '<div class="live" id="l_' + f[0] + '"></div></div>';
   });
   $('fields').innerHTML = h;
   F.forEach(f => $('f_' + f[0]).oninput = calc);
+
+  let tab = 'qty';   // 'qty' = Production tab, 'ctr' = Counters tab
+  function setTab(t) {
+    tab = t;
+    $('tProd').classList.toggle('on', t === 'qty');
+    $('tCtr').classList.toggle('on', t === 'ctr');
+    document.querySelectorAll('.fld').forEach(d => d.classList.toggle('hide', !d.classList.contains(t)));
+    $('shiftBox').classList.toggle('hide', t === 'ctr');
+    $('sum').classList.toggle('hide', t === 'ctr');
+    $('msg').textContent = '';
+  }
+  $('tProd').onclick = () => setTab('qty');
+  $('tCtr').onclick = () => setTab('ctr');
+  setTab('qty');
 
   const num = v => (v === '' || v === null || v === undefined || isNaN(Number(v))) ? null : Number(v);
   // a counter reading of 0 means "no reading" (ignored)
@@ -142,6 +162,7 @@
   $('save').onclick = () => {
     const vals = {};
     F.forEach(f => {
+      if (f[3] !== tab) return;                         // only the tab you are on
       const v = $('f_' + f[0]).value;
       if (v === '') return;
       if (f[3] === 'ctr' && Number(v) === 0) return;   // 0 counter = no reading, not sent
@@ -153,7 +174,7 @@
     call({ api: 'add', date: $('date').value, shift: shift, vals: JSON.stringify(vals) }, r => {
       $('msg').textContent = '✓ ' + r.message;
       live = r.live;
-      F.forEach(f => { $('f_' + f[0]).value = ''; });
+      F.forEach(f => { if (f[3] === tab) $('f_' + f[0]).value = ''; });   // keep what is typed on the other tab
       calc();
       $('save').disabled = false;
     }, e => { $('msg').textContent = '⚠ ' + e.message; $('save').disabled = false; });
