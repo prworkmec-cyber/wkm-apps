@@ -72,18 +72,22 @@ button.ghost{background:#fff;color:var(--acc);border:2px solid var(--acc)}
 #lq{width:100%;margin-top:8px;font-size:15px;padding:9px;border:1px solid #ccc;border-radius:8px}
 button.del{background:#fff;color:var(--bad);border:2px solid var(--bad)}
 .fx{background:#f3f3f3!important;color:#888}
+.sw{position:relative;flex:1;min-width:0}.sw input{width:100%}
+.sug{position:absolute;left:0;right:0;top:100%;margin-top:4px;background:#fff;border:1px solid #ddd;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.15);z-index:30;max-height:60vh;overflow:auto}
+.sug .si{padding:10px 12px;border-bottom:1px solid #f0ebe5;font-size:14px;cursor:pointer}.sug .si:last-child{border-bottom:0}
+.sug .si b{display:block;font-family:monospace;font-size:14px}.sug .si span{color:var(--mut);font-size:12px}
 #zoom{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
 #zoom img{max-width:100%;max-height:80vh;border-radius:8px;background:#fff}#zcap{color:#fff;margin-top:10px;text-align:center;font-size:15px}
 </style></head><body><div class="wrap">
-<div class="hdr"><h1>WKM Stock Check</h1><button type="button" class="adm admpill" onclick="adminAsk()">🔒</button></div><div class="sub">Upload the daily stock sheet photo, check the balance left for each item, then post the new entries.</div>
-<div class="card"><label>PIN</label><input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="Enter PIN"></div>
+<div class="hdr"><h1>WKM Stock Check</h1><span style="display:flex;gap:6px"><button type="button" id="pinPill" class="admpill hide" onclick="pinOk(false)" title="Change PIN">🔑</button><button type="button" class="adm admpill" onclick="adminAsk()">🔒</button></span></div><div class="sub">Upload the daily stock sheet photo, check the balance left for each item, then post the new entries.</div>
+<div class="card" id="pinCard"><label>PIN</label><input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="Enter PIN"></div>
 <div id="vCheck"><div class="card"><label>Project / order</label><select id="ord"><option value="">Enter the PIN to load orders…</option></select></div>
 <div class="card"><label>Entry dates <span class="nm">(tap one or more days)</span></label><input id="dt" type="hidden"><div id="cal" class="cal"></div><div id="dsel" class="nm" style="margin-top:8px"></div></div>
 <div class="card"><label class="pick">📷 Take / upload photo<input id="file" type="file" accept="image/*"></label><div id="fn" class="fn"></div>
 <button id="go" onclick="go()">Check balances</button><div id="st"></div></div>
 <div id="out"></div></div>
 <div id="vInv" class="hide">
- <div class="card"><div class="invtop"><input id="iq" type="search" placeholder="Search code, name or article" oninput="drawInv()"><button type="button" id="irf" onclick="loadInv(true)">↻</button></div>
+ <div class="card"><div class="invtop"><div class="sw"><input id="iq" type="search" autocomplete="off" placeholder="Search code, name or article" oninput="drawInv();suggest()" onfocus="suggest()" onblur="setTimeout(hideSug,200)"><div id="sug" class="sug hide"></div></div><button type="button" id="irf" onclick="loadInv(true)">↻</button></div>
   <div class="chips"><button type="button" data-f="all" class="on" onclick="invFilter(this)">All</button><button type="button" data-f="in" onclick="invFilter(this)">In stock</button><button type="button" data-f="zero" onclick="invFilter(this)">Zero stock</button></div>
   <div id="ist" class="nm" style="margin-top:8px">Enter the PIN above to see the inventory.</div><div id="ipg" class="nm" style="color:var(--acc)"></div></div>
  <div id="ilist"></div>
@@ -124,6 +128,7 @@ var ORDLOADED='';
 function loadOrders(){var pin=document.getElementById('pin').value.trim();if(pin.length<4||pin===ORDLOADED)return;ORDLOADED=pin;var s=document.getElementById('ord');s.innerHTML='<option value="">Loading orders…</option>';
  google.script.run.withSuccessHandler(function(r){if(!r||r.error){ORDLOADED='';s.innerHTML='<option value="">'+esc((r&&r.error)||'Could not load orders')+'</option>';return;}
   var o='<option value="">(no order)</option>',g=null;(r.orders||[]).forEach(function(x){if(x.group!==g){if(g!==null)o+='</optgroup>';g=x.group;o+='<optgroup label="'+esc(g)+'">';}o+='<option value="'+esc(x.orderNo)+'">'+esc(x.orderNo)+(x.project?' – '+esc(x.project):'')+'</option>';});if(g!==null)o+='</optgroup>';s.innerHTML=o;
+  pinOk(true);
   try{var so=localStorage.getItem('wkmord');if(so&&[].some.call(s.options,function(op){return op.value===so;}))s.value=so;else if(r.orders&&r.orders.length===1)s.value=r.orders[0].orderNo;}catch(e){}})
  .withFailureHandler(function(){ORDLOADED='';s.innerHTML='<option value="">Could not load orders</option>';}).stockOrders(pin);}
 document.getElementById('pin').addEventListener('input',loadOrders);document.getElementById('pin').addEventListener('change',loadOrders);
@@ -191,11 +196,26 @@ function loadInv(force){var pin=document.getElementById('pin').value.trim(),st=d
  fetch(WKM_API,{method:'POST',body:JSON.stringify({action:'inventory',pin:pin}),redirect:'follow'}).then(function(r){if(!r.ok)throw new Error('Server error '+r.status);return r.json();})
   .then(function(j){if(!j||j.error){st.innerHTML='<span class="bad">'+esc((j&&j.error)||'Could not load')+'</span>';return;}INV=j.items||[];INVPIN=pin;INV.at=j.at;drawInv();try{localStorage.setItem('wkminv',JSON.stringify({items:INV,at:j.at,p:pinH(pin)}));}catch(e){}})
   .catch(function(e){st.innerHTML='<span class="bad">Could not load ('+esc(e.message||e)+'). Tap ↻ to try again.</span>';});}
+/* a query matches when every typed word is the START of a word in the item (code, name, size, article, material).
+   Article codes are also split at , _ - / * so 'tondo3,4' finds TONDO3,40P_142 */
+function invToks(i){if(i._t)return i._t;var raw=[i.code,'wkm'+i.no,i.no,i.name,i.size,i.article,i.material].join(' ').toLowerCase();
+ i._t=raw.split(/[\s,_\-\/*()]+/).filter(Boolean).concat(String(i.article||'').toLowerCase(),String(i.code||'').toLowerCase().replace(/\s+/g,''));return i._t;}
+function invMatch(i,q){if(!q)return true;var t=invToks(i),art=String(i.article||'').toLowerCase();if(art.indexOf(q)===0)return true;
+ return q.split(/[\s,_\-\/*()]+/).filter(Boolean).every(function(w){return t.some(function(x){return x.indexOf(w)===0;});});}
+function suggest(){var q=(document.getElementById('iq').value||'').toLowerCase().trim(),box=document.getElementById('sug');
+ if(!INV||!q){box.classList.add('hide');return;}
+ var hits=INV.filter(function(i){return invMatch(i,q);}).slice(0,8);
+ if(!hits.length){box.innerHTML='<div class="si nm">No match</div>';box.classList.remove('hide');return;}
+ box.innerHTML=hits.map(function(i){return '<div class="si" onmousedown="pickSug(\''+esc(i.code)+'\')"><b>'+esc(i.article||i.code)+'</b><span>'+esc(i.code)+' · '+esc(i.name)+(i.size?' '+esc(i.size):'')+'</span></div>';}).join('');
+ box.classList.remove('hide');}
+function hideSug(){document.getElementById('sug').classList.add('hide');}
+function pickSug(code){var it=invBy(code);if(!it)return;document.getElementById('iq').value=it.article||it.code;hideSug();drawInv();
+ var el=document.querySelector('.ph[data-c="'+code+'"]');if(el)el.scrollIntoView({block:'center'});}
 function invFilter(b){INVF=b.dataset.f;[].forEach.call(document.querySelectorAll('.chips button'),function(x){x.classList.toggle('on',x===b);});drawInv();}
 function invQty(n,u){return (Number(n)||0).toLocaleString('en-US')+' <span class="nm">'+esc(u||'')+'</span>';}
 function drawInv(){if(!INV)return;var q=(document.getElementById('iq').value||'').toLowerCase().replace(/\s+/g,' ').trim();
  var list=INV.filter(function(i){var has=(Number(i.kg)||0)>0||(Number(i.nos)||0)>0;if(INVF==='in'&&!has)return false;if(INVF==='zero'&&has)return false;
-  if(!q)return true;var hay=(i.code+' wkm'+i.no+' '+i.name+' '+i.size+' '+i.article+' '+i.material).toLowerCase();return q.split(' ').every(function(w){return hay.indexOf(w)>=0;});});
+  return invMatch(i,q);});
  document.getElementById('ist').innerHTML=list.length+' of '+INV.length+' items · live stock at '+esc(INV.at||'')+' · view only';
  var h='';list.forEach(function(i){var k=INV.indexOf(i),has=(Number(i.kg)||0)>0||(Number(i.nos)||0)>0;
   h+='<div class="it"><div class="ph"'+(i.img?' data-c="'+esc(i.code)+'" onclick="zoomInv('+k+')"':'')+'>'+(i.img?'…':'no picture')+'</div><div class="bd">'
@@ -374,6 +394,8 @@ function postEntry(){var L=LEDGER,st=document.getElementById('est'),b=document.g
    closeSheet();loadLedger();INV=null;})
   .catch(function(x){b.disabled=false;st.innerHTML='<div class="msg err">'+esc(x.message||x)+'</div>';});}
 
+function pinOk(ok){document.getElementById('pinCard').classList.toggle('hide',!!ok);document.getElementById('pinPill').classList.toggle('hide',!ok);
+ if(!ok){var p=document.getElementById('pin');p.value='';ORDLOADED='';INV=null;INVPIN='';ADMIN='';adminUi();p.focus();}}
 function fmtd(n){n=Math.round(n*100)/100;return (n>0?'+':'')+n;}
 function show(all){[].forEach.call(document.querySelectorAll('.rsh'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r&&i.value){r.shift=i.value;r._shAssumed=false;}});[].forEach.call(document.querySelectorAll('.rn'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.note=i.value.trim();});[].forEach.call(document.querySelectorAll('.rd'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.doc=i.value.trim();});[].forEach.call(document.querySelectorAll('.rp'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.party=i.value.trim();});window.LASTROWS=all;drawCal();var sel=document.getElementById('dt').value;var shf='';var rows=all.filter(function(r){if(sel&&sel.split(',').indexOf(r.date)<0)return false;if(!r.shift||r._shAssumed){r.shift=shf;r._shAssumed=true;}if(shf&&r.shift!==shf)return false;return true;});
  if(!rows.length&&all.length){var ds=[];all.forEach(function(r){if(r.date&&ds.indexOf(r.date)<0)ds.push(r.date);});document.getElementById('out').innerHTML='<div class="card">No entries for <b>'+esc(sel.split(',').map(nice).join(', '))+(shf?' · '+(shf==='N'?'Night':'Day')+' shift':'')+'</b> on this photo.'+(ds.length?'<br>Dates on the photo: '+ds.map(nice).join(', ')+'. Tap those days in the calendar to see them (green dot = on the photo).':'')+'</div>';return;}
