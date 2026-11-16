@@ -79,14 +79,14 @@ button.del{background:#fff;color:var(--bad);border:2px solid var(--bad)}
 #zoom{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
 #zoom img{max-width:100%;max-height:80vh;border-radius:8px;background:#fff}#zcap{color:#fff;margin-top:10px;text-align:center;font-size:15px}
 </style></head><body><div class="wrap">
-<div class="hdr"><h1>WKM Stock Check</h1><span style="display:flex;gap:6px"><button type="button" id="pinPill" class="admpill hide" onclick="pinOk(false)" title="Change PIN">🔑</button><button type="button" class="adm admpill" onclick="adminAsk()">🔒</button></span></div><div class="sub">Upload the daily stock sheet photo, check the balance left for each item, then post the new entries.</div>
+<div class="hdr"><h1>WKM Stock Check</h1><span style="display:flex;gap:6px"><button type="button" id="pinPill" class="admpill hide" onclick="pinOk(false)" title="Change PIN">🔑</button><button type="button" class="adm admpill" onclick="adminAsk()">🔒</button></span></div><div class="sub">Live stock, pictures and statements.</div>
 <div class="card" id="pinCard"><label>PIN</label><input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="Enter PIN"></div>
-<div id="vCheck"><div class="card"><label>Project / order</label><select id="ord"><option value="">Enter the PIN to load orders…</option></select></div>
+<div id="vCheck" class="hide"><div class="card"><label>Project / order</label><select id="ord"><option value="">Enter the PIN to load orders…</option></select></div>
 <div class="card"><label>Entry dates <span class="nm">(tap one or more days)</span></label><input id="dt" type="hidden"><div id="cal" class="cal"></div><div id="dsel" class="nm" style="margin-top:8px"></div></div>
 <div class="card"><label class="pick">📷 Take / upload photo<input id="file" type="file" accept="image/*"></label><div id="fn" class="fn"></div>
 <button id="go" onclick="go()">Check balances</button><div id="st"></div></div>
 <div id="out"></div></div>
-<div id="vInv" class="hide">
+<div id="vInv">
  <div class="card"><div class="invtop"><div class="sw"><input id="iq" type="search" autocomplete="off" placeholder="Search code, name or article" oninput="drawInv();suggest()" onfocus="suggest()" onblur="setTimeout(hideSug,200)"><div id="sug" class="sug hide"></div></div><button type="button" id="irf" onclick="loadInv(true)">↻</button></div>
   <div class="chips"><button type="button" data-f="all" class="on" onclick="invFilter(this)">All</button><button type="button" data-f="in" onclick="invFilter(this)">In stock</button><button type="button" data-f="zero" onclick="invFilter(this)">Zero stock</button></div>
   <div id="ist" class="nm" style="margin-top:8px">Enter the PIN above to see the inventory.</div><div id="ipg" class="nm" style="color:var(--acc)"></div></div>
@@ -97,7 +97,7 @@ button.del{background:#fff;color:var(--bad);border:2px solid var(--bad)}
   <div id="lst" class="nm" style="margin-top:8px">Choose an item to see its statement.</div></div>
  <div id="lout"></div>
 </div>
-<nav class="btabs"><button type="button" id="tChk" class="on" onclick="setView('chk')">📷<br>Daily check</button><button type="button" id="tInv" onclick="setView('inv')">📦<br>Inventory</button><button type="button" id="tLed" onclick="setView('led')">📒<br>Statement</button></nav>
+<nav class="btabs"><button type="button" id="tChk" class="hide" onclick="setView('chk')">📷<br>Daily check</button><button type="button" id="tInv" class="on" onclick="setView('inv')">📦<br>Inventory</button><button type="button" id="tLed" onclick="setView('led')">📒<br>Statement</button></nav>
 <div id="sheet" class="hide" onclick="if(event.target===this)closeSheet()"><div class="shc"><div id="shb"></div></div></div>
 <div id="zoom" class="hide" onclick="this.classList.add('hide')"><img id="zimg" alt=""><div id="zcap"></div></div>
 <script>
@@ -186,7 +186,7 @@ function drawCal(){var sel=selDates(),ph=[],today=ymd(new Date());(window.LASTRO
  document.getElementById('dsel').innerHTML=sel.length?'Showing: <b>'+sel.map(nice).join(', ')+'</b> · <a href="#" onclick="setDates([]);return false">show all dates</a>':'No day picked – showing <b>all dates</b> on the photo.';}
 var INV=null,INVF='all',INVPIN='';
 function pinH(p){var h=5381;p='wkm|'+p;for(var i=0;i<p.length;i++)h=((h<<5)+h+p.charCodeAt(i))|0;return h;}   // saved list only shows again with the right PIN
-function setView(v){[['chk','vCheck','tChk'],['inv','vInv','tInv'],['led','vLed','tLed']].forEach(function(x){document.getElementById(x[1]).classList.toggle('hide',x[0]!==v);document.getElementById(x[2]).classList.toggle('on',x[0]===v);});
+function setView(v){if(v==='chk'&&!ADMIN)v='inv';[['chk','vCheck','tChk'],['inv','vInv','tInv'],['led','vLed','tLed']].forEach(function(x){document.getElementById(x[1]).classList.toggle('hide',x[0]!==v);document.getElementById(x[2]).classList.toggle('on',x[0]===v);});
  if(v==='inv')loadInv(false);if(v==='led')ledgerTab();window.scrollTo(0,0);}
 function loadInv(force){var pin=document.getElementById('pin').value.trim(),st=document.getElementById('ist');
  if(pin.length<4){st.innerHTML='Enter the PIN above to see the inventory.';return;}
@@ -271,7 +271,8 @@ function adminTry(){var c=document.getElementById('acode').value.trim(),st=docum
  fetch(WKM_API,{method:'POST',body:JSON.stringify({action:'admincheck',admin:c}),redirect:'follow'}).then(function(r){return r.json();})
   .then(function(j){if(j&&j.ok){ADMIN=c;closeSheet();adminUi();}else st.innerHTML='<div class="msg err">Wrong admin code</div>';})
   .catch(function(e){st.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';});}
-function adminUi(){[].forEach.call(document.querySelectorAll('.adm'),function(b){b.textContent=ADMIN?'🔓 Admin':'🔒';b.title=ADMIN?'Admin on – tap to lock':'Admin';b.classList.toggle('on',!!ADMIN);});
+function adminUi(){var tc=document.getElementById('tChk');tc.classList.toggle('hide',!ADMIN);
+ if(!ADMIN&&!document.getElementById('vCheck').classList.contains('hide'))setView('inv');[].forEach.call(document.querySelectorAll('.adm'),function(b){b.textContent=ADMIN?'🔓 Admin':'🔒';b.title=ADMIN?'Admin on – tap to lock':'Admin';b.classList.toggle('on',!!ADMIN);});
  document.body.classList.toggle('isadmin',!!ADMIN);drawInv();if(LEDGER)drawLedger();}
 
 /* bottom sheet used for admin code, edit item, add entry */
