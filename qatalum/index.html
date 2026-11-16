@@ -41,7 +41,7 @@
   <input type="date" id="date">
   <div id="fields"></div>
   <div class="card" id="sum"></div>
-  <button id="save">Save</button>
+  <button id="save">Save production + counters</button>
   <div id="msg"></div>
 </div>
 <nav class="tabs"><button id="tProd" class="on">🏭<br>Production</button><button id="tCtr">🔢<br>Counters</button></nav>
@@ -162,7 +162,6 @@
   $('save').onclick = () => {
     const vals = {};
     F.forEach(f => {
-      if (f[3] !== tab) return;                         // only the tab you are on
       const v = $('f_' + f[0]).value;
       if (v === '') return;
       if (f[3] === 'ctr' && Number(v) === 0) return;   // 0 counter = no reading, not sent
@@ -174,7 +173,7 @@
     call({ api: 'add', date: $('date').value, shift: shift, vals: JSON.stringify(vals) }, r => {
       $('msg').textContent = '✓ ' + r.message;
       live = r.live;
-      F.forEach(f => { if (f[3] === tab) $('f_' + f[0]).value = ''; });   // keep what is typed on the other tab
+      F.forEach(f => { $('f_' + f[0]).value = ''; });   // one Save sends both tabs
       calc();
       $('save').disabled = false;
     }, e => { $('msg').textContent = '⚠ ' + e.message; $('save').disabled = false; });
