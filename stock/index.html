@@ -25,7 +25,7 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}.minus{color:var(--bad)}
 .posted{background:#e8f5e9;color:var(--ok)}.new{background:#fff4e5;color:#8a4a00}
 .warn{color:var(--bad);font-size:12px}.nm{font-size:11px;color:var(--mut)}
 .good{color:var(--ok)}.bad{color:var(--bad)}.sm{font-size:11px;font-weight:bold}
-.two{display:flex;gap:6px;margin-bottom:6px}.two input{flex:1;min-width:0}
+.two{display:flex;gap:6px;margin-bottom:6px}.two>div{flex:1;min-width:0}.two>div select,.two>div input{width:100%}.two input{flex:1;min-width:0}
 .cal .calh{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .cal button{width:auto;margin:0;padding:0;border-radius:8px;font-weight:normal}
 .cal .calh button{background:#f1e6da;color:var(--acc);font-size:20px;width:44px;height:36px;font-weight:bold}
@@ -89,7 +89,7 @@ button.del{background:#fff;color:var(--bad);border:2px solid var(--bad)}
 <div id="vInv">
  <div class="card"><div class="invtop"><div class="sw"><input id="iq" type="search" autocomplete="off" placeholder="Search code, name or article" oninput="drawInv();suggest()" onfocus="suggest()" onblur="setTimeout(hideSug,200)"><div id="sug" class="sug hide"></div></div><button type="button" id="irf" onclick="loadInv(true)">↻</button></div>
   <div class="chips"><button type="button" data-f="all" class="on" onclick="invFilter(this)">All</button><button type="button" data-f="in" onclick="invFilter(this)">In stock</button><button type="button" data-f="zero" onclick="invFilter(this)">Zero stock</button></div>
-  <div id="ist" class="nm" style="margin-top:8px">Enter the PIN above to see the inventory.</div><div id="ipg" class="nm" style="color:var(--acc)"></div></div>
+  <div id="ist" class="nm" style="margin-top:8px">Enter the PIN above to see the inventory.</div><div id="ipg" class="nm" style="color:var(--acc)"></div><button type="button" id="addItemBtn" class="hide" onclick="addItem()">＋ New item</button></div>
  <div id="ilist"></div>
 </div></div>
 <div id="vLed" class="hide">
@@ -271,7 +271,7 @@ function adminTry(){var c=document.getElementById('acode').value.trim(),st=docum
  fetch(WKM_API,{method:'POST',body:JSON.stringify({action:'admincheck',admin:c}),redirect:'follow'}).then(function(r){return r.json();})
   .then(function(j){if(j&&j.ok){ADMIN=c;closeSheet();adminUi();}else st.innerHTML='<div class="msg err">Wrong admin code</div>';})
   .catch(function(e){st.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';});}
-function adminUi(){var tc=document.getElementById('tChk');tc.classList.toggle('hide',!ADMIN);
+function adminUi(){var ab=document.getElementById('addItemBtn');if(ab)ab.classList.toggle('hide',!ADMIN);var tc=document.getElementById('tChk');tc.classList.toggle('hide',!ADMIN);
  if(!ADMIN&&!document.getElementById('vCheck').classList.contains('hide'))setView('inv');[].forEach.call(document.querySelectorAll('.adm'),function(b){b.textContent=ADMIN?'🔓 Admin':'🔒';b.title=ADMIN?'Admin on – tap to lock':'Admin';b.classList.toggle('on',!!ADMIN);});
  document.body.classList.toggle('isadmin',!!ADMIN);drawInv();if(LEDGER)drawLedger();}
 
@@ -380,6 +380,31 @@ function saveLine(row,del){var L=LEDGER,st=document.getElementById('xst'),by=doc
   .then(function(j){if(!j||j.error){st.innerHTML='<div class="msg err">'+esc((j&&j.error)||'Not saved')+'</div>';return;}
    closeSheet();INV=null;loadLedger();})
   .catch(function(e){st.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';});}
+/* admin: new item -> Inventory Sheet row + new statement tab + _EXPORT + Index sheet (server does all four) */
+var NEWB64='';
+function addItem(){if(!ADMIN)return;NEWB64='';
+ openSheet('<h3>New item</h3><div class="nm">Gets the next WKM code and its own inventory statement tab.</div>'
+  +'<div class="edimg" id="nimg">no picture</div><label class="pick">📷 Picture (optional)<input type="file" accept="image/*" onchange="newPic(this)"></label>'
+  +'<label>Item name *</label><input id="nname" type="text">'
+  +'<label>Dm / size</label><input id="nsize" type="text">'
+  +'<label>Article / item code</label><input id="nart" type="text">'
+  +'<label>Material</label><input id="nmat" type="text" value="GI">'
+  +'<div class="two"><div><label>Weight unit</label><select id="nku"><option>KG</option></select></div><div><label>Count unit</label><select id="nnu"><option>NO</option><option>PCS</option><option>COIL</option><option>BUNDLE</option></select></div></div>'
+  +'<div class="two"><div><label>Unit weight (kg, optional)</label><input id="nuw" type="text" inputmode="decimal"></div><div><label>Minimum stock (optional)</label><input id="nmin" type="text" inputmode="decimal"></div></div>'
+  +'<label>Notes</label><input id="nnote" type="text">'
+  +'<button type="button" id="nsave" onclick="saveNewItem()">Create item</button><button type="button" class="ghost" onclick="closeSheet()">Cancel</button><div id="nst"></div>');}
+function newPic(inp){var f=inp.files[0];if(!f)return;shrinkTo(f,900,function(b64){if(!b64)return;NEWB64=b64;document.getElementById('nimg').innerHTML='<img src="data:image/jpeg;base64,'+b64+'" alt="">';});}
+function saveNewItem(){var st=document.getElementById('nst'),b=document.getElementById('nsave'),g=function(id){return document.getElementById(id).value.trim();};
+ var d={name:g('nname'),size:g('nsize'),article:g('nart'),material:g('nmat'),kgUnit:g('nku'),nosUnit:g('nnu'),unitWeight:g('nuw'),minStock:g('nmin'),notes:g('nnote')};
+ if(!d.name){st.innerHTML='<div class="msg err">Enter the item name.</div>';return;}
+ if(INV&&d.article&&INV.some(function(i){return String(i.article).toLowerCase()===d.article.toLowerCase();})&&!confirm('Article code '+d.article+' already exists on another item. Create anyway?'))return;
+ if(!confirm('Create new item "'+d.name+(d.size?' '+d.size:'')+'" with its own statement tab?'))return;
+ if(NEWB64){d.b64=NEWB64;d.mime='image/jpeg';}
+ b.disabled=true;st.innerHTML='<div class="msg wait">Creating… (about 20 seconds)</div>';
+ fetch(WKM_API,{method:'POST',body:JSON.stringify({action:'itemadd',admin:ADMIN,item:d}),redirect:'follow'}).then(function(r){return r.json();})
+  .then(function(j){b.disabled=false;if(!j||j.error){st.innerHTML='<div class="msg err">'+esc((j&&j.error)||'Not created')+'</div>';return;}
+   closeSheet();INV=null;document.getElementById('iq').value=j.code;loadInv(true);alert(j.code+' created – Inventory Sheet row '+j.plan.inventoryRow+', new statement tab '+j.code+'.');})
+  .catch(function(e){b.disabled=false;st.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';});}
 function seg(b){[].forEach.call(b.parentNode.children,function(x){x.classList.toggle('on',x===b);});}
 function segv(id){var b=document.querySelector('#'+id+' .on');return b?b.dataset.v:'';}
 function postEntry(){var L=LEDGER,st=document.getElementById('est'),b=document.getElementById('epost');
