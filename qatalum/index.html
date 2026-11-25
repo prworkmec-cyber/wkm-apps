@@ -31,6 +31,15 @@
   .tabs button.on{background:#e3eefd;color:#1a73e8}
   .hide{display:none}
   #msg{margin-top:14px;font-size:15px;text-align:center;white-space:pre-line}
+
+  @media (min-width:900px){
+    .wrap{max-width:980px;padding:24px 32px}
+    #fields{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,auto);grid-auto-flow:column;column-gap:28px}
+    #fields .fld.hide{display:block}               /* computer: Production and Counters both visible */
+    .tabs{display:none}body{padding-bottom:0}
+    #shiftBox.hide{display:block}
+    #sum,#save,#msg{max-width:460px}
+  }
 </style>
 </head>
 <body>
