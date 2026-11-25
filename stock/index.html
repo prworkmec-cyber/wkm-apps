@@ -78,6 +78,19 @@ button.del{background:#fff;color:var(--bad);border:2px solid var(--bad)}
 .sug .si b{display:block;font-family:monospace;font-size:14px}.sug .si span{color:var(--mut);font-size:12px}
 #zoom{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px}
 #zoom img{max-width:100%;max-height:80vh;border-radius:8px;background:#fff}#zcap{color:#fff;margin-top:10px;text-align:center;font-size:15px}
+
+/* computer / tablet: use the width (phones below 900px are unchanged) */
+@media (min-width:900px){
+ .wrap{max-width:1180px;padding:24px 32px}
+ #ilist{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px}
+ #ilist .it{margin-bottom:0}
+ #lout{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:8px}
+ #lout .le{margin-bottom:0}
+ #vInv>.card,#vLed>.card,#vCheck>.card{max-width:760px}
+ #pinCard{max-width:420px}
+ .btabs{left:50%;right:auto;transform:translateX(-50%);width:560px;border-radius:14px 14px 0 0}
+ #sheet{align-items:center}#sheet .shc{border-radius:16px;max-width:560px}
+}
 </style></head><body><div class="wrap">
 <div class="hdr"><h1>WKM Stock Check</h1><span style="display:flex;gap:6px"><button type="button" id="pinPill" class="admpill hide" onclick="pinOk(false)" title="Change PIN">🔑</button><button type="button" class="adm admpill" onclick="adminAsk()">🔒</button></span></div><div class="sub">Live stock, pictures and statements.</div>
 <div class="card" id="pinCard"><label>PIN</label><input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="Enter PIN"></div>
