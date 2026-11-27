@@ -37,6 +37,7 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}.minus{color:var(--bad)}
 .cal .cd.on.ph:after{background:#fff}
 .cal .cd:disabled{opacity:.3}
 .hide{display:none!important}
+input.rck,td input[type=checkbox]{width:22px;height:22px;margin:2px 0 0}a.ed{text-decoration:none;font-size:15px;padding:0 4px}
 body{padding-bottom:84px}
 .btabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:#fff;border-top:1px solid #e3d8cc;box-shadow:0 -2px 8px rgba(0,0,0,.08);padding:6px 8px calc(6px + env(safe-area-inset-bottom));z-index:20}
 .btabs button{flex:1;width:auto;margin:0 4px;padding:8px 4px;font-size:15px;line-height:1.3;background:none;color:#7a6a5a;border-radius:10px}
@@ -436,42 +437,131 @@ function postEntry(){var L=LEDGER,st=document.getElementById('est'),b=document.g
 function pinOk(ok){document.getElementById('pinCard').classList.toggle('hide',!!ok);document.getElementById('pinPill').classList.toggle('hide',!ok);
  if(!ok){var p=document.getElementById('pin');p.value='';ORDLOADED='';INV=null;INVPIN='';ADMIN='';adminUi();p.focus();}}
 function fmtd(n){n=Math.round(n*100)/100;return (n>0?'+':'')+n;}
-function show(all){[].forEach.call(document.querySelectorAll('.rsh'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r&&i.value){r.shift=i.value;r._shAssumed=false;}});[].forEach.call(document.querySelectorAll('.rn'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.note=i.value.trim();});[].forEach.call(document.querySelectorAll('.rd'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.doc=i.value.trim();});[].forEach.call(document.querySelectorAll('.rp'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.party=i.value.trim();});window.LASTROWS=all;drawCal();var sel=document.getElementById('dt').value;var shf='';var rows=all.filter(function(r){if(sel&&sel.split(',').indexOf(r.date)<0)return false;if(!r.shift||r._shAssumed){r.shift=shf;r._shAssumed=true;}if(shf&&r.shift!==shf)return false;return true;});
- if(!rows.length&&all.length){var ds=[];all.forEach(function(r){if(r.date&&ds.indexOf(r.date)<0)ds.push(r.date);});document.getElementById('out').innerHTML='<div class="card">No entries for <b>'+esc(sel.split(',').map(nice).join(', '))+(shf?' · '+(shf==='N'?'Night':'Day')+' shift':'')+'</b> on this photo.'+(ds.length?'<br>Dates on the photo: '+ds.map(nice).join(', ')+'. Tap those days in the calendar to see them (green dot = on the photo).':'')+'</div>';return;}
-var os=document.getElementById('ord'),ot=os&&os.value?os.options[os.selectedIndex].text:'(no order)';document.getElementById('out').innerHTML='';var pre='<div class="sub" style="margin:4px 0 0">Project: <b>'+esc(ot)+'</b></div>';
- setTimeout(function(){var o=document.getElementById('out');o.innerHTML=pre+o.innerHTML;},0);if(!rows.length){document.getElementById('out').innerHTML='<div class="card">No rows found on the photo.</div>';return;}
- /* computer balance = ledger balance now, minus/plus only the NEW lines shown here (the ones that will be posted), in date/shift order */
- var runB={};rows.forEach(function(r){if(r.error||r.posted||r.base==null)return;var it=r.item;if(!(it in runB))runB[it]=Number(r.base)||0;
-  runB[it]=Math.round((runB[it]+(Number(r.add)||0)-(Number(r.minus)||0))*100)/100;r.balance=runB[it];
-  var hs=!(r.sheet===null||r.sheet===undefined||r.sheet==='');r.mismatch=hs&&Math.abs(Number(r.sheet)-r.balance)>0.5;});
- var h='',g=null;rows.forEach(function(r){var k=r.date+'|'+r.shift;if(k!==g){if(g!==null)h+='</table>';g=k;h+='<div class="grp">'+nice(r.date)+' · '+(r.shift==='N'?'Night shift':r.shift==='D'?'Day shift':'Shift not read')+'</div><table><tr><th>WKM</th><th style="text-align:center">Shift</th><th style="text-align:right">+ / −</th><th style="text-align:right">Computer<br>balance</th><th style="text-align:right">Sheet<br>balance</th></tr>';}
-  var cls=String(r.change).charAt(0)==='-'?'minus':'plus';
-  var k=all.indexOf(r),sv=r.shift||'';h+='<tr><td><b>'+esc(r.item)+'</b><div class="nm">'+esc(r.name)+'</div></td><td style="text-align:center">'+((!r.posted&&!r.error)?'<select class="rsh" data-k="'+k+'" style="width:58px;padding:6px;font-size:15px'+(sv?'':';border:2px solid #c62828')+'"><option value=""'+(sv?'':' selected')+'>?</option><option value="D"'+(sv==='D'?' selected':'')+'>D</option><option value="N"'+(sv==='N'?' selected':'')+'>N</option></select>':'<b>'+(sv||'?')+'</b>')+'</td><td class="n '+cls+'">'+esc(String(r.change).replace('-','−'))+'</td><td class="n">';
-  if(r.error){h+='<span class="warn">'+esc(r.error)+'</span></td><td></td></tr>';}
+/* ===== Daily check: results table =====
+   Every line on the photo has a tick box. Lines still to post are ticked, lines already in the ledger are locked.
+   Computer balance = the ledger's real balance now, then every ticked new line of that item in date/shift order
+   (also lines hidden by the date filter). A later line can't be posted while an earlier one of the same item
+   is still unposted. The paper is also checked against itself (previous written balance ± quantity). */
+function rkey(d,s){return String(d||'')+(s==='N'?2:(s==='D'?1:0));}
+function syncInputs(){var w=document.getElementById('who');if(w)window.WHO=w.value;var A=window.LASTROWS||[],f=function(c,set){[].forEach.call(document.querySelectorAll(c),function(i){var r=A[+i.dataset.k];if(r)set(r,i);});};
+ f('.rsh',function(r,i){if(i.value){r.shift=i.value;r._shAssumed=false;}});f('.rn',function(r,i){r.note=i.value.trim();});
+ f('.rd',function(r,i){r.doc=i.value.trim();});f('.rp',function(r,i){r.party=i.value.trim();});}
+function calcRows(all){var sel=selDates(),maxSel=sel.length?sel[sel.length-1]:'';
+ var act=all.filter(function(r){return !r.del&&!r.error;});
+ act.sort(function(a,b){var x=rkey(a.date,a.shift),y=rkey(b.date,b.shift);return x<y?-1:(x>y?1:a.k-b.k);});
+ var run={},prevPaper={},openEarlier={};
+ act.forEach(function(r){var it=String(r.item),d=Math.round(((Number(r.add)||0)-(Number(r.minus)||0))*100)/100;
+  r.block='';r.late='';r.paper='';
+  if(!r.posted&&!r._manual)r.chk=!maxSel||r.date<=maxSel;   // hidden earlier lines are included, later days are not
+  if(r.posted)r.chk=false;
+  if(!(it in run))run[it]=Number(r.base)||0;
+  if(r.posted){r.cb=Math.round(Number(r.balance)*100)/100;}
+  else if(r.chk){run[it]=Math.round((run[it]+d)*100)/100;r.cb=run[it];
+   if(openEarlier[it])r.block='Earlier line '+openEarlier[it]+' for WKM-'+it+' is not ticked. Tick it, or delete it if it is wrong.';
+   if(r.last&&r.last.date&&rkey(r.date,r.shift)<rkey(r.last.date,r.last.shift))r.late='The ledger already has a later line ('+nice(r.last.date)+(r.last.shift?' '+r.last.shift:'')+'). This one will be added after it.';}
+  else{r.cb=null;if(!openEarlier[it])openEarlier[it]=nice(r.date)+(r.shift?' '+r.shift:'');}
+  var hs=!(r.sheet===null||r.sheet===undefined||r.sheet==='');
+  r.mismatch=hs&&r.cb!=null&&Math.abs(Number(r.sheet)-r.cb)>0.5;
+  if(hs&&prevPaper[it]!=null){var exp=Math.round((prevPaper[it]+d)*100)/100;
+   if(Math.abs(exp-Number(r.sheet))>0.5)r.paper='Paper does not add up: '+prevPaper[it]+' '+(d<0?'− '+(-d):'+ '+d)+' = '+exp+', but '+r.sheet+' is written. Check the quantity or the balance.';}
+  if(hs)prevPaper[it]=Number(r.sheet);});
+ return act;}
+function show(all){syncInputs();window.LASTROWS=all;all.forEach(function(r,i){if(r.k==null)r.k=i;});drawCal();
+ var sel=selDates(),inSel=function(r){return !sel.length||sel.indexOf(r.date)>=0;};
+ var act=calcRows(all);
+ var rows=all.filter(function(r){return inSel(r);}).sort(function(a,b){var x=rkey(a.date,a.shift),y=rkey(b.date,b.shift);return x<y?-1:(x>y?1:a.k-b.k);});
+ var os=document.getElementById('ord'),ot=os&&os.value?os.options[os.selectedIndex].text:'(no order)';
+ var h='<div class="sub" style="margin:4px 0 0">Project: <b>'+esc(ot)+'</b></div>';
+ if(!all.length){document.getElementById('out').innerHTML='<div class="card">No rows found on the photo.</div>';return;}
+ if(!rows.length){var ds=[];all.forEach(function(r){if(r.date&&ds.indexOf(r.date)<0)ds.push(r.date);});
+  h+='<div class="card">No entries for <b>'+esc(sel.map(nice).join(', '))+'</b> on this photo.'+(ds.length?'<br>Dates on the photo: '+ds.map(nice).join(', ')+'. Tap those days in the calendar to see them (green dot = on the photo).':'')+'</div>';}
+ var hid=act.filter(function(r){return !r.posted&&r.chk&&!inSel(r);});
+ if(hid.length){var hd={};hid.forEach(function(r){var t=nice(r.date)+(r.shift?' '+(r.shift==='N'?'night':'day'):'');hd[t]=(hd[t]||0)+1;});
+  h+='<div class="msg wait">Also included – earlier lines on the photo that are <b>not posted yet</b>: '+Object.keys(hd).map(function(t){return esc(t)+' ('+hd[t]+')';}).join(', ')
+   +'. They are counted in the balances and posted first. <a href="#" onclick="setDates([]);return false">Show them</a></div>';}
+ var g=null;rows.forEach(function(r){var gk=r.date+'|'+r.shift;
+  if(gk!==g){if(g!==null)h+='</table>';g=gk;h+='<div class="grp">'+nice(r.date)+' · '+(r.shift==='N'?'Night shift':r.shift==='D'?'Day shift':'Shift not read')+'</div><table><tr><th style="width:30px"></th><th>WKM</th><th style="text-align:center">Shift</th><th style="text-align:right">+ / −</th><th style="text-align:right">Computer<br>balance</th><th style="text-align:right">Sheet<br>balance</th></tr>';}
+  var k=r.k,sv=r.shift||'',can=!r.posted&&!r.del;
+  var box=r.posted?'<input type="checkbox" disabled title="already in the ledger">':(r.del||r.error?'':'<input type="checkbox" class="rck" '+(r.chk?'checked ':'')+'onchange="rowTick('+k+',this.checked)">');
+  var cls=(Number(r.minus)||0)>0?'minus':'plus',chg=(Number(r.add)||0)?'+'+r.add:((Number(r.minus)||0)?'−'+r.minus:'0');
+  h+='<tr'+(r.del?' style="opacity:.45"':'')+'><td>'+box+'</td><td><b>'+esc(r.item)+'</b>'+(can?' <a href="#" class="ed" onclick="rowEdit('+k+');return false" title="Correct this line">✎</a>':'')+'<div class="nm">'+esc(r.name||'')+'</div></td>'
+   +'<td style="text-align:center">'+(can&&!r.error?'<select class="rsh" data-k="'+k+'" onchange="show(window.LASTROWS)" style="width:58px;padding:6px;font-size:15px'+(sv?'':';border:2px solid #c62828')+'"><option value=""'+(sv?'':' selected')+'>?</option><option value="D"'+(sv==='D'?' selected':'')+'>D</option><option value="N"'+(sv==='N'?' selected':'')+'>N</option></select>':'<b>'+(sv||'?')+'</b>')+'</td>'
+   +'<td class="n '+cls+'">'+esc(chg)+'</td><td class="n">';
+  var notes='';
+  if(r.del){h+='<span class="nm">deleted</span></td><td class="n"><a href="#" onclick="rowRestore('+k+');return false">restore</a></td></tr>';}
+  else if(r.error){h+='<span class="warn">'+esc(r.error)+'</span></td><td></td></tr>';}
   else{var hs=!(r.sheet===null||r.sheet===undefined||r.sheet==='');
-   h+='<b>'+esc(r.balance)+'</b> <span class="nm">'+(r.unit==='KG'?'kg':'pcs')+'</span><br><span class="tag '+(r.posted?'posted">posted ✓':'new">not posted yet')+'</span>'+(r.loose?'<div class="warn" style="font-size:11px">⚠ '+esc(r.loose)+'</div>':'')+'</td>'
-    +'<td class="n">'+(!hs?'<span class="nm">—</span>':(r.mismatch?'<b class="bad">'+esc(r.sheet)+'</b><div class="bad sm">✗ wrong by '+esc(fmtd(Number(r.sheet)-Number(r.balance)))+'</div>':'<b class="good">'+esc(r.sheet)+'</b><div class="good sm">✓ correct</div>'))+'</td></tr>';}
-  if(!r.posted&&!r.error&&(r.add||r.minus)){var kk=all.indexOf(r),pl=r.add?'Supplier':'Customer';
-   h+='<tr><td colspan="5" style="padding-top:0"><div class="two"><input class="rd" type="text" data-k="'+kk+'" placeholder="Doc No." value="'+esc(r.doc||'')+'"><input class="rp" type="text" data-k="'+kk+'" placeholder="'+pl+'" value="'+esc(r.party||'')+'"></div>'
-    +'<input class="rn" type="text" data-k="'+kk+'" placeholder="Note (optional)" value="'+esc(r.note||'')+'"></td></tr>';}});
- h+='</table>';
- var np=rows.filter(function(r){return !r.posted&&!r.error&&(r.add||r.minus);});window.TOPOST=np;
- if(np.length){var nm='';try{nm=localStorage.getItem('wkmname')||'';}catch(e){}
+   h+=(r.cb==null?'<span class="nm">not ticked</span>':'<b>'+esc(r.cb)+'</b> <span class="nm">'+(r.unit==='KG'?'kg':'pcs')+'</span>')
+    +'<br><span class="tag '+(r.posted?'posted">posted ✓':'new">'+(r.chk?'will be posted':'skipped'))+'</span>'+'</td>'
+    +'<td class="n">'+(!hs?'<span class="nm">—</span>':(r.cb==null?'<b>'+esc(r.sheet)+'</b>':(r.mismatch?'<b class="bad">'+esc(r.sheet)+'</b><div class="bad sm">✗ wrong by '+esc(fmtd(Number(r.sheet)-Number(r.cb)))+'</div>':'<b class="good">'+esc(r.sheet)+'</b><div class="good sm">✓ correct</div>')))+'</td></tr>';
+   if(r.loose)notes+='<div class="warn">⚠ '+esc(r.loose)+'</div>';
+   if(r.edited)notes+='<div class="nm" style="color:#8a4a00">✎ Corrected by operator – AI read: '+esc(r.orig)+'</div>';
+   if(r.paper)notes+='<div class="warn">⚠ '+esc(r.paper)+'</div>';
+   if(r.block&&r.chk)notes+='<div class="warn"><b>⛔ '+esc(r.block)+'</b></div>';
+   if(r.late&&r.chk)notes+='<div class="nm" style="color:#8a4a00">ℹ '+esc(r.late)+'</div>';}
+  if(notes)h+='<tr><td></td><td colspan="5" style="padding-top:0">'+notes+'</td></tr>';
+  if(can&&!r.error&&r.chk&&(r.add||r.minus)){var pl=r.add?'Supplier':'Customer';
+   h+='<tr><td></td><td colspan="5" style="padding-top:0"><div class="two"><input class="rd" type="text" data-k="'+k+'" placeholder="Doc No." value="'+esc(r.doc||'')+'"><input class="rp" type="text" data-k="'+k+'" placeholder="'+pl+'" value="'+esc(r.party||'')+'"></div>'
+    +'<input class="rn" type="text" data-k="'+k+'" placeholder="Note (optional)" value="'+esc(r.note||'')+'"></td></tr>';}});
+ if(g!==null)h+='</table>';
+ var np=act.filter(function(r){return !r.posted&&r.chk&&(r.add||r.minus);});window.TOPOST=np;
+ if(np.length){var nm=window.WHO!=null?window.WHO:'';if(!nm)try{nm=localStorage.getItem('wkmname')||'';}catch(e){}
+  var bad=np.filter(function(r){return r.block;}).length;
   h+='<div class="card" style="margin-top:12px"><label>Your name (needed to post)</label><input id="who" type="text" autocomplete="name" value="'+esc(nm)+'">'
-   +'<button id="pb" onclick="post()">Post '+np.length+' new entr'+(np.length>1?'ies':'y')+' to ledger</button><div id="pst"></div></div>';}
+   +'<button id="pb" onclick="post()"'+(bad?' disabled':'')+'>Post '+np.length+' ticked entr'+(np.length>1?'ies':'y')+' to ledger</button>'
+   +(bad?'<div class="msg err">'+bad+' ticked line(s) come after an unticked earlier line of the same item (⛔). Fix that first.</div>':'')+'<div id="pst"></div></div>';}
  document.getElementById('out').innerHTML=h;}
-function post(){var np=window.TOPOST||[];if(!np.length)return;[].forEach.call(document.querySelectorAll('.rsh'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r){r.shift=i.value;r._shAssumed=false;}});[].forEach.call(document.querySelectorAll('.rn'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.note=i.value.trim();});[].forEach.call(document.querySelectorAll('.rd'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.doc=i.value.trim();});[].forEach.call(document.querySelectorAll('.rp'),function(i){var r=(window.LASTROWS||[])[+i.dataset.k];if(r)r.party=i.value.trim();});var who=(document.getElementById('who').value||'').trim();var ps=document.getElementById('pst');
+function rowTick(k,on){syncInputs();var r=window.LASTROWS[k];if(!r)return;r.chk=!!on;r._manual=true;show(window.LASTROWS);}
+function rowRestore(k){syncInputs();var r=window.LASTROWS[k];if(!r)return;r.del=false;show(window.LASTROWS);}
+/* correct a line the AI misread (before it goes to the ledger) */
+function rowEdit(k){syncInputs();var r=window.LASTROWS[k];if(!r||r.posted)return;var t=ymd(new Date());
+ var q=(Number(r.add)||0)?Number(r.add):(Number(r.minus)||0),dir=(Number(r.add)||0)?'in':'out';
+ openSheet('<h3>Correct line</h3><div class="nm">Change what the AI read wrongly. Nothing goes to the ledger until you post.</div>'
+  +'<label>WKM number</label><input id="xi" type="number" inputmode="numeric" value="'+esc(r.item)+'">'
+  +'<label>Date</label><input id="xd" type="date" value="'+esc(r.date||t)+'" max="'+t+'">'
+  +'<label>Shift</label><div class="seg" id="xs"><button type="button" class="'+(r.shift!=='N'?'on':'')+'" data-v="D" onclick="seg(this)">Day</button><button type="button" class="'+(r.shift==='N'?'on':'')+'" data-v="N" onclick="seg(this)">Night</button></div>'
+  +'<label>Movement</label><div class="seg" id="xm"><button type="button" class="'+(dir==='in'?'on':'')+'" data-v="in" onclick="seg(this)">＋ IN</button><button type="button" class="'+(dir==='out'?'on':'')+'" data-v="out" onclick="seg(this)">− OUT</button></div>'
+  +'<label>Quantity</label><input id="xq" type="number" inputmode="decimal" min="0" step="any" value="'+esc(q||'')+'">'
+  +'<label>Balance written on the sheet</label><input id="xb" type="number" inputmode="decimal" step="any" value="'+esc(r.sheet==null?'':r.sheet)+'">'
+  +'<button type="button" id="xok" onclick="rowApply('+k+')">Apply</button><button type="button" class="ghost" onclick="rowDelete('+k+')">Delete this line (not on the paper)</button><button type="button" class="ghost" onclick="closeSheet()">Cancel</button><div id="xst"></div>');}
+function lineTxt(r){var q=(Number(r.add)||0)?'+'+r.add:'−'+(Number(r.minus)||0);return 'WKM-'+r.item+' '+(r.date||'?')+' '+(r.shift||'?')+' '+q+(r.sheet==null||r.sheet===''?'':' bal '+r.sheet);}
+function rowDelete(k){var r=window.LASTROWS[k];if(!r)return;r.del=true;closeSheet();show(window.LASTROWS);}
+function rowApply(k){var r=window.LASTROWS[k],st=document.getElementById('xst');if(!r)return;
+ var it=Number(document.getElementById('xi').value),d=document.getElementById('xd').value,s=segv('xs'),m=segv('xm'),q=Number(document.getElementById('xq').value),bv=document.getElementById('xb').value;
+ if(!(it>0)){st.innerHTML='<div class="msg err">Enter the WKM number.</div>';return;}
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){st.innerHTML='<div class="msg err">Pick the date.</div>';return;}
+ if(!(q>0)){st.innerHTML='<div class="msg err">Enter the quantity.</div>';return;}
+ var was=lineTxt(r),n={item:it,date:d,shift:s,add:m==='in'?q:0,minus:m==='out'?q:0,sheet:bv===''?null:Number(bv),k:k};
+ if(lineTxt(n)===was){closeSheet();return;}
+ var b=document.getElementById('xok');b.disabled=true;st.innerHTML='<div class="msg wait">Checking the ledger…</div>';
+ api({action:'recheck',row:n,order:document.getElementById('ord').value}).then(function(j){b.disabled=false;
+   if(!j||j.error||!j.row){st.innerHTML='<div class="msg err">'+esc((j&&j.error)||'Could not check the line')+'</div>';return;}
+   var x=j.row;if(!r.edited){r.orig=was;r.edited=true;}
+   ['item','name','unit','date','shift','add','minus','sheet','posted','base','loose','error','last','balance','change'].forEach(function(f){r[f]=x[f];});
+   r.item=it;r.date=d;r.shift=s;r.error=x.error||'';r._manual=false;
+   r.fix=r.orig+' → '+lineTxt(r);closeSheet();
+   var sl=selDates();if(sl.length&&sl.indexOf(r.date)<0)setDates(sl.concat([r.date]));else show(window.LASTROWS);})
+ .catch(function(e){b.disabled=false;st.innerHTML='<div class="msg err">'+esc(e.message||e)+'</div>';});}
+function post(){syncInputs();show(window.LASTROWS);var np=window.TOPOST||[];if(!np.length)return;var who=(document.getElementById('who').value||'').trim();var ps=document.getElementById('pst');
  if(who.length<2){ps.innerHTML='<div class="msg err">Enter your name first.</div>';return;}
- if(np.some(function(r){return !r.shift;})){ps.innerHTML='<div class="msg err">Some entries have no Day/Night shift (red ?). Pick D or N on those rows first.</div>';return;}
+ if(np.some(function(r){return !r.shift;})){ps.innerHTML='<div class="msg err">Some ticked entries have no Day/Night shift (red ?). Pick D or N on those rows first.</div>';return;}
+ if(np.some(function(r){return r.block;}))return;
  try{localStorage.setItem('wkmname',who);}catch(e){}
- var mm=np.filter(function(r){return r.mismatch;}).length,dt=document.getElementById('dt').value;
- if(!confirm('Post '+np.length+' entries for '+(dt?dt.split(',').map(nice).join(', '):'all dates')+' to the Inventory Statement?'+(mm?' WARNING: '+mm+' row(s) do not match the balance written on the sheet.':'')))return;
+ var mm=np.filter(function(r){return r.mismatch;}).length,pp=np.filter(function(r){return r.paper;}).length,days={};
+ np.forEach(function(r){days[nice(r.date)+' '+(r.shift||'')]=1;});
+ if(!confirm('Post '+np.length+' entries ('+Object.keys(days).join(', ')+') to the Inventory Statement?'+(mm?'\nWARNING: '+mm+' row(s) do not match the balance written on the sheet.':'')+(pp?'\nWARNING: on '+pp+' row(s) the paper itself does not add up.':'')))return;
  var b=document.getElementById('pb');b.disabled=true;ps.innerHTML='<div class="msg wait">Posting… do not close this page.</div>';
  var ord=document.getElementById('ord').value;
- google.script.run.withSuccessHandler(function(r){b.disabled=false;if(!r||r.error){ps.innerHTML='<div class="msg err">'+esc((r&&r.error)||'Posting failed')+'</div>';return;}
-   var errs=r.errors||[];np.forEach(function(x){if(!errs.some(function(e){return e.indexOf('WKM-'+x.item+' no tab')===0;}))x.posted=true;});
-   show(window.LASTROWS);msg('✅ Posted '+r.ok+' entr'+(r.ok===1?'y':'ies')+' to the ledger.'+(errs.length?' Note: '+esc(errs.join(', ')):''),'wait');})
-  .withFailureHandler(function(e){b.disabled=false;ps.innerHTML='<div class="msg err">Error: '+esc(e.message||e)+'</div>';}).stockPost(document.getElementById('pin').value.trim(),np,who,ord);}
+ var send=np.map(function(r){return {item:r.item,unit:r.unit,add:Number(r.add)||0,minus:Number(r.minus)||0,date:r.date,shift:r.shift,doc:r.doc||'',party:r.party||'',note:r.note||'',fix:r.edited?r.fix:''};});
+ google.script.run.withSuccessHandler(function(res){b.disabled=false;if(!res||res.error){ps.innerHTML='<div class="msg err">'+esc((res&&res.error)||'Posting failed')+'</div>';return;}
+   var errs=res.errors||[],delta={};
+   np.forEach(function(x){var e=errs.filter(function(t){return t.indexOf('WKM-'+x.item+' ')===0;});
+     if(e.some(function(t){return /no tab/.test(t);}))return;
+     if(e.some(function(t){return t.indexOf(x.date+' '+x.shift+' already in ledger')>0||/already posted/.test(t);})){x.posted=true;x.balance=x.cb;return;}
+     x.posted=true;x.balance=x.cb;delta[x.item]=(delta[x.item]||0)+(Number(x.add)||0)-(Number(x.minus)||0);});
+   (window.LASTROWS||[]).forEach(function(r){if(delta[r.item]!=null)r.base=Math.round(((Number(r.base)||0)+delta[r.item])*100)/100;});
+   show(window.LASTROWS);msg('✅ Posted '+res.ok+' entr'+(res.ok===1?'y':'ies')+' to the ledger.'+(errs.length?' Note: '+esc(errs.join(', ')):''),'wait');})
+  .withFailureHandler(function(e){b.disabled=false;ps.innerHTML='<div class="msg err">Error: '+esc(e.message||e)+'</div>';}).stockPost(document.getElementById('pin').value.trim(),send,who,ord);}
 
 document.getElementById('pin').addEventListener('input',function(){if(this.value.trim().length>=4&&!document.getElementById('vInv').classList.contains('hide'))loadInv(false);});
 </script></body></html>
