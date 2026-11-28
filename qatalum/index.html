@@ -30,6 +30,18 @@
   .tabs button{flex:1;font-size:15px;line-height:1.3;padding:8px 4px;border:0;background:none;color:#5f6b7a;font-weight:bold;border-radius:10px;margin:0 4px}
   .tabs button.on{background:#e3eefd;color:#1a73e8}
   .hide{display:none}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  #histBtn{font-size:15px;padding:8px 12px;border:2px solid #1a73e8;background:#fff;color:#1a73e8;border-radius:20px;white-space:nowrap}
+  #hist{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;justify-content:center;align-items:flex-start;overflow:auto}
+  #hist .hbox{background:#f4f6f8;width:100%;max-width:640px;min-height:100%;padding:14px;box-sizing:border-box}
+  .hhead{display:flex;justify-content:space-between;align-items:center;font-size:18px;margin-bottom:6px}
+  .hhead button{font-size:20px;border:0;background:none;padding:4px 10px}
+  .hd{background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.1);font-size:14px}
+  .hd .dt{font-weight:bold;font-size:16px;margin-bottom:6px}
+  .hd table{width:100%;border-collapse:collapse}.hd td,.hd th{padding:3px 4px;text-align:right}.hd th{color:#666;font-weight:normal;font-size:12px}.hd td:first-child,.hd th:first-child{text-align:left}
+  .hd .eb{display:flex;gap:8px;margin-top:8px}.hd .eb button{flex:1;padding:9px;font-size:15px;border:2px solid #1a73e8;background:#fff;color:#1a73e8;border-radius:8px}
+  .hd .ctr{color:#555;font-size:13px;margin-top:6px}
+  #hist.hide{display:none}
   #msg{margin-top:14px;font-size:15px;text-align:center;white-space:pre-line}
 
   @media (min-width:900px){
@@ -44,7 +56,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Qatalum – Daily Production</h1>
+  <div class="top"><h1>Qatalum – Daily Production</h1><button type="button" id="histBtn">📜 History</button></div>
   <div id="shiftBox"><div class="shift"><button id="Day" class="on">Day shift</button><button id="Night">Night shift</button></div></div>
   <label>Date</label>
   <input type="date" id="date">
@@ -54,6 +66,8 @@
   <div id="msg"></div>
 </div>
 <nav class="tabs"><button id="tProd" class="on">🏭<br>Production</button><button id="tCtr">🔢<br>Counters</button></nav>
+<div id="hist" class="hide"><div class="hbox"><div class="hhead"><b>History</b><button type="button" id="histClose">✕</button></div>
+<div class="nm" style="font-size:13px;color:#555;margin-bottom:8px">Tap <b>Edit Day</b> or <b>Edit Night</b> to correct a shift – the numbers open in the form, change them and Save.</div><div id="hlist">Loading…</div></div></div>
 <script>
   // Data lives in the Google Sheet; this page talks to the Apps Script web app's JSON API.
   const API = 'https://script.google.com/macros/s/AKfycbygNAt3BORXl47Th-s4sZRiKSNW2JOc41o0_X8EKrmaKXAyeasuz9aBH6pxGldeKZtzDg/exec';
@@ -198,6 +212,32 @@
       calc();
       $('save').disabled = false;
     }, e => { $('msg').textContent = '⚠ ' + e.message; $('save').disabled = false; });
+  };
+  /* ---- History: what was saved per date; Edit opens that date/shift in the form (Save replaces the numbers) ---- */
+  const dash = x => (x === '' || x === null || x === undefined) ? '–' : fmt(x);
+  function openHistory() {
+    $('hist').classList.remove('hide'); $('hlist').textContent = 'Loading…';
+    call({ api: 'history', days: 45 }, j => {
+      const rows = (j.rows || []).filter(r => [r.day.cages, r.day.spn, r.day.spi, r.night.cages, r.night.spn, r.night.spi, r.ctr.arms, r.ctr.small, r.ctr.wire].some(x => x !== '' && x !== null));
+      if (!rows.length) { $('hlist').textContent = 'Nothing saved yet.'; return; }
+      $('hlist').innerHTML = rows.map(r => '<div class="hd"><div class="dt">' + niceDate(r.date) + ' ' + r.date.slice(0, 4) + '</div>' +
+        '<table><tr><th></th><th>Cages</th><th>Spider normal</th><th>Spider inverted</th></tr>' +
+        '<tr><td>Day</td><td>' + dash(r.day.cages) + '</td><td>' + dash(r.day.spn) + '</td><td>' + dash(r.day.spi) + '</td></tr>' +
+        '<tr><td>Night</td><td>' + dash(r.night.cages) + '</td><td>' + dash(r.night.spn) + '</td><td>' + dash(r.night.spi) + '</td></tr></table>' +
+        '<div class="ctr">Counters: arms ' + dash(r.ctr.arms) + (r.made.arms ? ' (made ' + fmt(r.made.arms) + ')' : '') +
+        ' · small rings ' + dash(r.ctr.small) + ' · long wire ' + dash(r.ctr.wire) + (r.made.wire ? ' (made ' + fmt(r.made.wire) + ')' : '') + '</div>' +
+        '<div class="eb"><button type="button" data-d="' + r.date + '" data-s="Day">✎ Edit Day</button><button type="button" data-d="' + r.date + '" data-s="Night">✎ Edit Night</button></div></div>').join('');
+    }, e => { $('hlist').textContent = '⚠ ' + e.message; });
+  }
+  $('histBtn').onclick = openHistory;
+  $('histClose').onclick = () => $('hist').classList.add('hide');
+  $('hlist').onclick = ev => {
+    const b = ev.target.closest('button[data-d]'); if (!b) return;
+    $('date').value = b.dataset.d; shift = b.dataset.s;
+    $('Day').classList.toggle('on', shift === 'Day'); $('Night').classList.toggle('on', shift === 'Night');
+    $('hist').classList.add('hide'); saveLabel(); load(true);
+    $('msg').textContent = '✎ Editing ' + shift.toUpperCase() + ' shift – ' + niceDate(b.dataset.d) + ': change the numbers and tap Save.';
+    window.scrollTo(0, 0);
   };
   load();
 </script>
