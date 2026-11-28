@@ -79,6 +79,14 @@
   const t = new Date();
   $('date').value = t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate());
   $('date').max = $('date').value;
+  (function autoShift() {
+    const h = t.getHours();
+    if (h < 8) { const y = new Date(t.getTime() - 864e5); $('date').value = y.getFullYear() + '-' + pad(y.getMonth() + 1) + '-' + pad(y.getDate()); shift = 'Night'; }
+    else if (h >= 20) shift = 'Night'; else shift = 'Day';
+    $('Day').classList.toggle('on', shift === 'Day'); $('Night').classList.toggle('on', shift === 'Night');
+  })();
+  const niceDate = d => { const m = String(d).match(/(\d{4})-(\d{2})-(\d{2})/); return m ? (+m[3]) + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m[2] - 1] : d; };
+  function saveLabel() { $('save').textContent = 'Save ' + shift.toUpperCase() + ' shift – ' + niceDate($('date').value); }
 
   let h = '';
   F.forEach(f => {
@@ -118,10 +126,10 @@
       let txt = '';
       if (f[3] === 'qty') {
         const saved = num(live.entry[k]), typed = num(el.value);
-        const a = total + (typed || 0);
+        const a = total - (saved || 0) + (typed === null ? (saved || 0) : typed);
         after[k] = a;
-        txt = 'Balance now ' + fmt(total) + (typed !== null ? ' + ' + fmt(typed) + ' = new balance <b>' + fmt(a) + '</b>' : '') +
-              (saved ? '<br><span class="chg">Already entered for this shift: ' + fmt(saved) + ' (your number is added to it)</span>' : '');
+        txt = 'Balance now ' + fmt(total) + (typed !== null && typed !== (saved || 0) ? ' → new balance <b>' + fmt(a) + '</b>' : '') +
+              (saved !== null ? '<br><span class="chg">Saved for this shift: ' + fmt(saved) + (typed !== null && typed !== saved ? ' → will be changed to ' + fmt(typed) : ' · to correct it, change the number and Save') + '</span>' : '');
       } else {
         const saved = ctr(live.entry[k]), typed = ctr(el.value), prev = ctr(live.prev[k]);
         const mSaved = made(saved, prev), mNew = typed === null ? mSaved : made(typed, prev);
@@ -145,6 +153,7 @@
       '<div><span>Complete</span><span>' + (live.totals.order ? (after.cages / live.totals.order * 100).toFixed(1) : 0) + '%</span></div>';
   }
 
+  function fillSaved() { F.forEach(f => { const s = live.entry[f[0]]; $('f_' + f[0]).value = (s === '' || s == null || (f[3] === 'ctr' && Number(s) === 0)) ? '' : s; }); saveLabel(); }
   let req = 0;
   function load(keepMsg) {
     if (!keepMsg) $('msg').textContent = 'Loading…';
@@ -153,7 +162,7 @@
     call({ api: 'live', date: $('date').value, shift: shift }, v => {
       if (my !== req) return;            // a newer date/shift was picked meanwhile
       live = v;
-      F.forEach(f => { $('f_' + f[0]).value = ''; });
+      fillSaved();
       calc();
       if (!keepMsg) $('msg').textContent = '';
       $('save').disabled = false;
@@ -164,25 +173,28 @@
     shift = s;
     $('Day').classList.toggle('on', s === 'Day');
     $('Night').classList.toggle('on', s === 'Night');
-    load();
+    saveLabel(); load();
   });
-  $('date').onchange = () => load();
+  $('date').onchange = () => { saveLabel(); load(); };
 
   $('save').onclick = () => {
-    const vals = {};
+    const vals = {}, lines = [];
     F.forEach(f => {
       const v = $('f_' + f[0]).value;
       if (v === '') return;
       if (f[3] === 'ctr' && Number(v) === 0) return;   // 0 counter = no reading, not sent
-      vals[f[0]] = v;
+      const s = live && live.entry[f[0]];
+      if (s !== '' && s != null && Number(s) === Number(v)) return;   // unchanged
+      vals[f[0]] = v; lines.push(f[1] + ': ' + (s !== '' && s != null ? fmt(s) + ' → ' : '') + fmt(v));
     });
-    if (!Object.keys(vals).length) { $('msg').textContent = 'Nothing to save – type at least one number.'; return; }
+    if (!Object.keys(vals).length) { $('msg').textContent = 'No changes to save.'; return; }
+    if (!confirm('Save ' + shift.toUpperCase() + ' shift – ' + niceDate($('date').value) + '?\n\n' + lines.join('\n'))) return;
     $('save').disabled = true;
     $('msg').textContent = 'Saving…';
     call({ api: 'add', date: $('date').value, shift: shift, vals: JSON.stringify(vals) }, r => {
       $('msg').textContent = '✓ ' + r.message;
       live = r.live;
-      F.forEach(f => { $('f_' + f[0]).value = ''; });   // one Save sends both tabs
+      fillSaved();
       calc();
       $('save').disabled = false;
     }, e => { $('msg').textContent = '⚠ ' + e.message; $('save').disabled = false; });
